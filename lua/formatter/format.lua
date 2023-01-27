@@ -105,47 +105,25 @@ function Format:insert()
     end
 end
 
----Runs basic formatter for buffer.
----Tries to run formatter for treesitter injections. Will insert into buffer
----later when formatting injections
----@param run_treesitter boolean
-function Format:run_basic(run_treesitter)
-    if vim.fn.executable(self.conf.exe) ~= 1 then
-        return vim.notify(string.format('%s: executable not found', self.conf.exe), vim.log.levels.ERROR, notify_opts)
+---@param conf FiletypeConfig
+---@param input table
+---@param on_exit fun(j, on_exit)
+function Format:execute(conf, input, on_exit)
+    if vim.fn.executable(conf.exe) ~= 1 then
+        return vim.notify(string.format('%s: executable not found', conf.exe), vim.log.levels.ERROR, notify_opts)
     end
-    if not self.conf then
-        return vim.notify(string.format('No config found for %s', vim.bo.ft), vim.log.levels.INFO, notify_opts)
-    end
-    if self.conf.cond and not self.conf.cond() then
+
+    if conf.cond and not conf.cond() then
         return
     end
 
     local job = require('plenary.job'):new({
-        command = self.conf.exe,
-        args = self.conf.args or {},
-        cwd = self.conf.cwd or vim.loop.cwd(),
-        writer = self.current_output,
+        command = conf.exe,
+        args = conf.args or {},
+        cwd = conf.cwd or vim.loop.cwd(),
+        writer = input,
         on_exit = function(j, exit_code)
-            if exit_code ~= 0 then
-                self.is_formatting = false
-                vim.schedule(function()
-                    vim.notify(
-                        string.format('Failed to format: %s', table.concat(j:stderr_result())),
-                        vim.log.levels.ERROR,
-                        notify_opts
-                    )
-                end)
-            else
-                local output = j:result()
-                self.current_output = output
-                if run_treesitter then
-                    vim.schedule(function()
-                        self:run_injections()
-                    end)
-                else
-                    self:insert()
-                end
-            end
+            on_exit(j, exit_code)
         end,
     })
 
@@ -154,6 +132,38 @@ function Format:run_basic(run_treesitter)
     else
         job:sync()
     end
+end
+
+---Runs basic formatter for buffer.
+---Tries to run formatter for treesitter injections. Will insert into buffer
+---later when formatting injections
+---@param run_treesitter boolean
+function Format:run_basic(run_treesitter)
+    if not self.conf then
+        return vim.notify(string.format('No config found for %s', vim.bo.ft), vim.log.levels.INFO, notify_opts)
+    end
+
+    self:execute(self.conf, self.current_output, function(j, exit_code)
+        if exit_code ~= 0 then
+            self.is_formatting = false
+            vim.schedule(function()
+                vim.notify(
+                    string.format('Failed to format: %s', table.concat(j:stderr_result())),
+                    vim.log.levels.ERROR,
+                    notify_opts
+                )
+            end)
+        else
+            self.current_output = j:result()
+            if run_treesitter then
+                vim.schedule(function()
+                    self:run_injections()
+                end)
+            else
+                self:insert()
+            end
+        end
+    end)
 end
 
 function Format:set_current_output()
@@ -185,49 +195,27 @@ end
 -- Format injections
 ---@param injection Injection
 function Format:_run_injections(injection)
-    local start_line, end_line, conf, input = injection.start_line, injection.end_line, injection.conf, injection.input
-
-    if vim.fn.executable(conf.exe) ~= 1 then
-        return vim.notify(string.format('%s: executable not found', conf.exe), vim.log.levels.ERROR, notify_opts)
-    end
-    if conf.cond and not conf.cond() then
-        return
-    end
-
-    local job = require('plenary.job'):new({
-        command = conf.exe,
-        args = conf.args or {},
-        cwd = conf.cwd or vim.loop.cwd(),
-        writer = input,
-        on_exit = function(j, exit_code)
-            if exit_code ~= 0 then
-                self.is_formatting = false
-                vim.schedule(function()
-                    vim.notify(
-                        string.format('Failed to format: %s', table.concat(j:stderr_result())),
-                        vim.log.levels.ERROR,
-                        notify_opts
-                    )
-                end)
-            else
-                local output = j:result()
-                table.insert(
-                    self.calculated_injections,
-                    { output = output, start_line = start_line, end_line = end_line }
+    self:execute(injection.conf, injection.input, function(j, exit_code)
+        if exit_code ~= 0 then
+            self.is_formatting = false
+            vim.schedule(function()
+                vim.notify(
+                    string.format('Failed to format: %s', table.concat(j:stderr_result())),
+                    vim.log.levels.ERROR,
+                    notify_opts
                 )
-                if #self.calculated_injections == #self.injections then
-                    self:set_current_output()
-                    self:insert()
-                end
+            end)
+        else
+            table.insert(
+                self.calculated_injections,
+                { output = j:result(), start_line = injection.start_line, end_line = injection.end_line }
+            )
+            if #self.calculated_injections == #self.injections then
+                self:set_current_output()
+                self:insert()
             end
-        end,
-    })
-
-    if self.async then
-        job:start()
-    else
-        job:sync()
-    end
+        end
+    end)
 end
 
 ---@param t table | string
@@ -265,10 +253,10 @@ end
 ---@param text string
 ---@return number Number of newlines at the start of the node text
 local function get_starting_newlines(text)
-    local a = vim.split(text, '\n')
+    local lines = vim.split(text, '\n')
     local newlines = 0
-    for _, t in ipairs(a) do
-        if t ~= '' then
+    for _, line in ipairs(lines) do
+        if line ~= '' then
             return newlines
         end
         newlines = newlines + 1
