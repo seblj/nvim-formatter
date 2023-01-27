@@ -127,11 +127,13 @@ function Format:run_basic(run_treesitter)
         writer = self.current_output,
         on_exit = function(j, exit_code)
             if exit_code ~= 0 then
-                vim.notify(
-                    string.format('Failed to format: %s', table.concat(j:stderr_result())),
-                    vim.log.levels.ERROR,
-                    notify_opts
-                )
+                vim.schedule(function()
+                    vim.notify(
+                        string.format('Failed to format: %s', table.concat(j:stderr_result())),
+                        vim.log.levels.ERROR,
+                        notify_opts
+                    )
+                end)
             else
                 local output = j:result()
                 self.current_output = output
@@ -198,11 +200,13 @@ function Format:_run_injections(injection)
         writer = input,
         on_exit = function(j, exit_code)
             if exit_code ~= 0 then
-                vim.notify(
-                    string.format('Failed to format: %s', table.concat(j:stderr_result())),
-                    vim.log.levels.ERROR,
-                    notify_opts
-                )
+                vim.schedule(function()
+                    vim.notify(
+                        string.format('Failed to format: %s', table.concat(j:stderr_result())),
+                        vim.log.levels.ERROR,
+                        notify_opts
+                    )
+                end)
             else
                 local output = j:result()
                 table.insert(
