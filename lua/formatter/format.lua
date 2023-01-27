@@ -111,8 +111,8 @@ end
 
 ---@param conf FiletypeConfig
 ---@param input table
----@param on_exit fun(j, on_exit)
-function Format:execute(conf, input, on_exit)
+---@param on_success fun(j)
+function Format:execute(conf, input, on_success)
     if vim.fn.executable(conf.exe) ~= 1 then
         return vim.notify(string.format('%s: executable not found', conf.exe), vim.log.levels.ERROR, notify_opts)
     end
@@ -127,7 +127,18 @@ function Format:execute(conf, input, on_exit)
         cwd = conf.cwd or vim.loop.cwd(),
         writer = input,
         on_exit = function(j, exit_code)
-            on_exit(j, exit_code)
+            if exit_code ~= 0 then
+                self.is_formatting = false
+                vim.schedule(function()
+                    vim.notify(
+                        string.format('Failed to format: %s', table.concat(j:stderr_result())),
+                        vim.log.levels.ERROR,
+                        notify_opts
+                    )
+                end)
+            else
+                on_success(j)
+            end
         end,
     })
 
@@ -147,25 +158,14 @@ function Format:run_basic(run_treesitter)
         return vim.notify(string.format('No config found for %s', vim.bo.ft), vim.log.levels.INFO, notify_opts)
     end
 
-    self:execute(self.conf, self.current_output, function(j, exit_code)
-        if exit_code ~= 0 then
-            self.is_formatting = false
+    self:execute(self.conf, self.current_output, function(j)
+        self.current_output = j:result()
+        if run_treesitter then
             vim.schedule(function()
-                vim.notify(
-                    string.format('Failed to format: %s', table.concat(j:stderr_result())),
-                    vim.log.levels.ERROR,
-                    notify_opts
-                )
+                self:run_injections()
             end)
         else
-            self.current_output = j:result()
-            if run_treesitter then
-                vim.schedule(function()
-                    self:run_injections()
-                end)
-            else
-                self:insert()
-            end
+            self:insert()
         end
     end)
 end
@@ -199,25 +199,14 @@ end
 -- Format injections
 ---@param injection Injection
 function Format:_run_injections(injection)
-    self:execute(injection.conf, injection.input, function(j, exit_code)
-        if exit_code ~= 0 then
-            self.is_formatting = false
-            vim.schedule(function()
-                vim.notify(
-                    string.format('Failed to format: %s', table.concat(j:stderr_result())),
-                    vim.log.levels.ERROR,
-                    notify_opts
-                )
-            end)
-        else
-            table.insert(
-                self.calculated_injections,
-                { output = j:result(), start_line = injection.start_line, end_line = injection.end_line }
-            )
-            if #self.calculated_injections == #self.injections then
-                self:set_current_output()
-                self:insert()
-            end
+    self:execute(injection.conf, injection.input, function(j)
+        table.insert(
+            self.calculated_injections,
+            { output = j:result(), start_line = injection.start_line, end_line = injection.end_line }
+        )
+        if #self.calculated_injections == #self.injections then
+            self:set_current_output()
+            self:insert()
         end
     end)
 end
