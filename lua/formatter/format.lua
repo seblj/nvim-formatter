@@ -127,6 +127,7 @@ function Format:run_basic(run_treesitter)
         writer = self.current_output,
         on_exit = function(j, exit_code)
             if exit_code ~= 0 then
+                self.is_formatting = false
                 vim.schedule(function()
                     vim.notify(
                         string.format('Failed to format: %s', table.concat(j:stderr_result())),
@@ -200,6 +201,7 @@ function Format:_run_injections(injection)
         writer = input,
         on_exit = function(j, exit_code)
             if exit_code ~= 0 then
+                self.is_formatting = false
                 vim.schedule(function()
                     vim.notify(
                         string.format('Failed to format: %s', table.concat(j:stderr_result())),
