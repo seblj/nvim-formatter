@@ -28,14 +28,18 @@ local Format = {}
 
 ---@param start_line? number
 ---@param end_line? number
-function Format:new(start_line, end_line)
+---@param injections? boolean
+function Format:new(start_line, end_line, injections)
     setmetatable({}, self)
-    self.start_line = start_line or 1
-    self.end_line = end_line or -1
+    self.start_line = not injections and start_line or 1
+    self.end_line = not injections and end_line or -1
     self.inital_changedtick = vim.api.nvim_buf_get_changedtick(0)
     self.async = config.get('format_async')
 
     local input = vim.api.nvim_buf_get_lines(0, self.start_line - 1, self.end_line, false)
+
+    self.injection_start_line = injections and start_line or nil
+    self.injection_end_line = injections and end_line or nil
 
     self.__index = self
     self.is_formatting = false
@@ -45,13 +49,13 @@ function Format:new(start_line, end_line)
     self.conf = config.get_ft_config(vim.bo.ft)
     self.injections = {}
     self.input = input
-    self.current_output = input
+    self.current_output = vim.deepcopy(input)
 
     return self
 end
 
 ---@param type "all" | "basic" | "injections"
----@param exit_pre boolean Whether to set ExitPre autocmd or not
+---@param exit_pre? boolean Whether to set ExitPre autocmd or not
 function Format:run(type, exit_pre)
     if not vim.bo.modifiable then
         return vim.notify('Buffer is not modifiable', vim.log.levels.INFO, notify_opts)
@@ -284,7 +288,20 @@ function Format:find_injections(input)
             if conf and ft ~= vim.bo.ft and should_format(conf, ft) then
                 local text = vim.treesitter.get_node_text(root, buf)
                 start_line = start_line + get_starting_newlines(text)
-                table.insert(injections, { start_line = start_line, end_line = end_line, conf = conf, input = text })
+
+                if self.injection_start_line and self.injection_end_line then
+                    if self.injection_start_line <= start_line and self.injection_end_line >= end_line then
+                        table.insert(
+                            injections,
+                            { start_line = start_line, end_line = end_line, conf = conf, input = text }
+                        )
+                    end
+                else
+                    table.insert(
+                        injections,
+                        { start_line = start_line, end_line = end_line, conf = conf, input = text }
+                    )
+                end
             end
         end
     end
