@@ -51,13 +51,14 @@ function Format:new(start_line, end_line)
 end
 
 ---@param type "all" | "basic" | "injections"
-function Format:run(type)
+---@param exit_pre boolean Whether to set ExitPre autocmd or not
+function Format:run(type, exit_pre)
     if not vim.bo.modifiable then
         return vim.notify('Buffer is not modifiable', vim.log.levels.INFO, notify_opts)
     end
 
     self.is_formatting = true
-    if self.async then
+    if exit_pre and self.async then
         vim.api.nvim_create_autocmd('ExitPre', {
             pattern = '*',
             group = vim.api.nvim_create_augroup('FormatterAsync', { clear = true }),

@@ -73,13 +73,15 @@ Note that it uses `BufWritePost` and not `BufWritePre`. This is necessary when
 formatting asynchronously to not trigger a buffer change. `nvim-formatter` will
 re-save the buffer after inserting new changes. If you format it synchronously
 by setting `format_async = false` you may change `BufWritePost` to `BufWritePre`.
+You can also then change `FormatWrite` to `Format`. See the section about
+exposed commands
 
 ```lua
 vim.api.nvim_create_autocmd('BufWritePost', {
     group = vim.api.nvim_create_augroup('FormatOnWrite', { clear = true }),
     pattern = '*.lua',
     callback = function()
-        vim.cmd.Format()
+        vim.cmd.FormatWrite()
     end,
 })
 ```
@@ -89,3 +91,11 @@ vim.api.nvim_create_autocmd('BufWritePost', {
 - `Format`: Formats everything in the buffer including injections
 - `FormatInjections`: Formats only treesitter injected languages
 - `FormatBasic`: Format buffer excluding treesitter injections
+
+The following are the same as the above, except that these are supposed to be
+used with an autocmd on BufWritePost with async. These sets the `ExitPre`
+autocmd to not quit before it finishes formatting
+
+- `FormatWrite`: Formats everything in the buffer including injections
+- `FormatInjectionsWrite`: Formats only treesitter injected languages
+- `FormatBasicWrite`: Format buffer excluding treesitter injections
