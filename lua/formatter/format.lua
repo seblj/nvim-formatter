@@ -1,7 +1,6 @@
 local config = require('formatter.config')
 local parsers = require('nvim-treesitter.parsers')
 local util = require('formatter.util')
-local notify_opts = { title = 'Formatter' }
 
 ---@class Injection
 ---@field start_line number
@@ -58,7 +57,7 @@ end
 ---@param exit_pre? boolean Whether to set ExitPre autocmd or not
 function Format:run(type, exit_pre)
     if not vim.bo.modifiable then
-        return vim.notify('Buffer is not modifiable', vim.log.levels.INFO, notify_opts)
+        return vim.notify('Buffer is not modifiable', vim.log.levels.INFO, util.notify_opts)
     end
 
     self.is_formatting = true
@@ -94,7 +93,11 @@ function Format:insert()
     if not vim.deep_equal(self.current_output, self.input) then
         vim.schedule(function()
             if self.async and self.inital_changedtick ~= vim.api.nvim_buf_get_changedtick(0) then
-                return vim.notify(string.format('Buffer changed while formatting'), vim.log.levels.INFO, notify_opts)
+                return vim.notify(
+                    string.format('Buffer changed while formatting'),
+                    vim.log.levels.INFO,
+                    util.notify_opts
+                )
             end
             local view = vim.fn.winsaveview()
             local marks = util.save_marks(self.bufnr)
@@ -114,7 +117,7 @@ end
 ---@param on_success fun(j)
 function Format:execute(conf, input, on_success)
     if vim.fn.executable(conf.exe) ~= 1 then
-        return vim.notify(string.format('%s: executable not found', conf.exe), vim.log.levels.ERROR, notify_opts)
+        return vim.notify(string.format('%s: executable not found', conf.exe), vim.log.levels.ERROR, util.notify_opts)
     end
 
     if conf.cond and not conf.cond() then
@@ -133,7 +136,7 @@ function Format:execute(conf, input, on_success)
                     vim.notify(
                         string.format('Failed to format: %s', table.concat(j:stderr_result())),
                         vim.log.levels.ERROR,
-                        notify_opts
+                        util.notify_opts
                     )
                 end)
             else
@@ -155,7 +158,7 @@ end
 ---@param run_treesitter boolean
 function Format:run_basic(run_treesitter)
     if not self.conf then
-        return vim.notify(string.format('No config found for %s', vim.bo.ft), vim.log.levels.INFO, notify_opts)
+        return vim.notify(string.format('No config found for %s', vim.bo.ft), vim.log.levels.INFO, util.notify_opts)
     end
 
     self:execute(self.conf, self.current_output, function(j)

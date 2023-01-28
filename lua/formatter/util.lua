@@ -1,6 +1,6 @@
-local parsers = require('nvim-treesitter.parsers')
-
 local util = {}
+
+util.notify_opts = { title = 'Formatter' }
 
 ---Workaround to save and restore marks before calling vim.api.nvim_buf_set_lines
 ---Ideally I would want to implement a diff that could calculate all the changes
