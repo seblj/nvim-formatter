@@ -31,9 +31,9 @@ function M.setup(opts)
             end
 
             if c_opts.args == '' then
-                Format:new(c_opts.line1, c_opts.line2, write):run('all')
+                Format:new(c_opts.line1, c_opts.line2):run('all', write)
             else
-                Format:new(c_opts.line1, c_opts.line2, write):run(c_opts.args)
+                Format:new(c_opts.line1, c_opts.line2):run(c_opts.args, write)
             end
         end, {
             complete = command_completion,

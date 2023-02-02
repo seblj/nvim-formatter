@@ -27,18 +27,14 @@ local Format = {}
 
 ---@param start_line? number
 ---@param end_line? number
----@param injections? boolean
-function Format:new(start_line, end_line, injections)
+function Format:new(start_line, end_line)
     setmetatable({}, self)
-    self.start_line = not injections and start_line or 1
-    self.end_line = not injections and end_line or -1
+    self.start_line = start_line or 1
+    self.end_line = end_line or -1
     self.inital_changedtick = vim.api.nvim_buf_get_changedtick(0)
     self.async = config.get('format_async')
 
     local input = vim.api.nvim_buf_get_lines(0, self.start_line - 1, self.end_line, false)
-
-    self.injection_start_line = injections and start_line or nil
-    self.injection_end_line = injections and end_line or nil
 
     self.__index = self
     self.is_formatting = false
@@ -192,26 +188,20 @@ function Format:run_injections()
     self.injections = self:find_injections(self.current_output)
     if #self.injections > 0 then
         for _, injection in ipairs(self.injections) do
-            self:_run_injections(injection)
+            self:execute(injection.conf, injection.input, function(j)
+                table.insert(
+                    self.calculated_injections,
+                    { output = j:result(), start_line = injection.start_line, end_line = injection.end_line }
+                )
+                if #self.calculated_injections == #self.injections then
+                    self:set_current_output()
+                    self:insert()
+                end
+            end)
         end
     else
         self:insert()
     end
-end
-
--- Format injections
----@param injection Injection
-function Format:_run_injections(injection)
-    self:execute(injection.conf, injection.input, function(j)
-        table.insert(
-            self.calculated_injections,
-            { output = j:result(), start_line = injection.start_line, end_line = injection.end_line }
-        )
-        if #self.calculated_injections == #self.injections then
-            self:set_current_output()
-            self:insert()
-        end
-    end)
 end
 
 ---@param t table | string
@@ -261,6 +251,7 @@ local function get_starting_newlines(text)
 end
 
 ---@param input table
+---@return Injection[]
 function Format:find_injections(input)
     local injections = {}
     local buf = vim.api.nvim_create_buf(false, true)
@@ -274,28 +265,18 @@ function Format:find_injections(input)
         for _, tree in ipairs(child._trees) do
             local root = tree:root()
             local range = { root:range() }
-            local start_line, end_line = range[1] + 1, range[3]
+            local start_line, end_line = range[1], range[3]
             local ft = parsers.list.filetype or lang
             local conf = config.get_ft_config(ft)
             if conf and ft ~= vim.bo.ft and should_format(conf, ft) then
                 local text = vim.treesitter.get_node_text(root, buf)
                 start_line = start_line + get_starting_newlines(text)
-                -- Only continue if the end_line is a higher line number that
-                -- start_line - 1. -1 because we add +1 when declaring it.
-                if end_line > start_line - 1 then
-                    if self.injection_start_line and self.injection_end_line then
-                        if self.injection_start_line <= start_line and self.injection_end_line >= end_line then
-                            table.insert(
-                                injections,
-                                { start_line = start_line, end_line = end_line, conf = conf, input = text }
-                            )
-                        end
-                    else
-                        table.insert(
-                            injections,
-                            { start_line = start_line, end_line = end_line, conf = conf, input = text }
-                        )
-                    end
+                -- Only continue if end_line is higher than start_line
+                if end_line > start_line then
+                    table.insert(
+                        injections,
+                        { start_line = start_line + 1, end_line = end_line, conf = conf, input = text }
+                    )
                 end
             end
         end
