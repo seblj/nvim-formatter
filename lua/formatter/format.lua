@@ -124,7 +124,7 @@ function Format:execute(conf, input, on_success)
         command = conf.exe,
         args = conf.args or {},
         cwd = conf.cwd or vim.loop.cwd(),
-        writer = input,
+        writer = table.concat(input, '\n'),
         on_exit = function(j, exit_code)
             if exit_code ~= 0 then
                 self.is_formatting = false
