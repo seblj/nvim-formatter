@@ -6,7 +6,7 @@ local util = require('formatter.util')
 ---@field start_line number
 ---@field end_line number
 ---@field conf FiletypeConfig
----@field input table
+---@field input string[]|string
 
 ---@class FormattedInjection
 ---@field output table
@@ -109,7 +109,7 @@ function Format:insert()
 end
 
 ---@param conf FiletypeConfig
----@param input table
+---@param input string[]|string
 ---@param on_success fun(j)
 function Format:execute(conf, input, on_success)
     if vim.fn.executable(conf.exe) ~= 1 then
@@ -120,11 +120,17 @@ function Format:execute(conf, input, on_success)
         return
     end
 
+    -- `get_node_text` returns string[] | string. Guard against trying to concat
+    -- a string which will give an error
+    if type(input) == 'table' then
+        input = table.concat(input, '\n')
+    end
+
     local job = require('plenary.job'):new({
         command = conf.exe,
         args = conf.args or {},
         cwd = conf.cwd or vim.loop.cwd(),
-        writer = table.concat(input, '\n'),
+        writer = input,
         on_exit = function(j, exit_code)
             if exit_code ~= 0 then
                 self.is_formatting = false
