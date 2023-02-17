@@ -276,13 +276,15 @@ function Format:find_injections(input)
             local conf = config.get_ft_config(ft)
             if conf and ft ~= vim.bo.ft and should_format(conf, ft) then
                 local text = vim.treesitter.get_node_text(root, buf)
-                start_line = start_line + get_starting_newlines(text)
-                -- Only continue if end_line is higher than start_line
-                if end_line > start_line then
-                    table.insert(
-                        injections,
-                        { start_line = start_line + 1, end_line = end_line, conf = conf, input = text }
-                    )
+                if text then
+                    start_line = start_line + get_starting_newlines(text)
+                    -- Only continue if end_line is higher than start_line
+                    if end_line > start_line then
+                        table.insert(
+                            injections,
+                            { start_line = start_line + 1, end_line = end_line, conf = conf, input = text }
+                        )
+                    end
                 end
             end
         end
