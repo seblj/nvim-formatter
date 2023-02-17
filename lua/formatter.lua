@@ -9,6 +9,31 @@ function M.setup(opts)
     opts = opts or {}
     config.set(opts)
 
+    if opts.format_on_save then
+        local group = vim.api.nvim_create_augroup('nvim-formatter_on_save', { clear = true })
+        for ft in pairs(opts.filetype) do
+            vim.api.nvim_create_autocmd('FileType', {
+                pattern = ft,
+                group = group,
+                callback = function()
+                    vim.api.nvim_create_autocmd('BufWritePost', {
+                        buffer = 0,
+                        group = group,
+                        callback = function()
+                            if type(opts.format_on_save) == 'function' then
+                                if opts.format_on_save() then
+                                    vim.cmd.FormatWrite()
+                                end
+                            else
+                                vim.cmd.FormatWrite()
+                            end
+                        end,
+                    })
+                end,
+            })
+        end
+    end
+
     local arguments = { 'basic', 'injections' }
 
     ---@param arg_lead string

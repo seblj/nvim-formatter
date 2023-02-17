@@ -2,7 +2,8 @@ local M = {}
 
 ---@class Config
 ---@field filetype table<string, fun(): FiletypeConfig>
----@field async boolean
+---@field format_async boolean
+---@field format_on_save boolean | fun(): boolean
 
 ---@class FiletypeConfig
 ---@field exe string
@@ -15,6 +16,7 @@ local M = {}
 ---@type Config
 local config = {
     format_async = true,
+    format_on_save = false,
 }
 local ft_config = {}
 

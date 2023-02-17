@@ -57,26 +57,30 @@ require('formatter').setup({
 
 ### Format on save
 
-To enable format on save, you can create an `autocmd` to trigger `FormatWrite`.
+To enable format on save, you can set an option `format_on_save` to true or a
+function that returns a boolean. This options is set to false by default. If it
+is a function, it will only format on save if the function returns true.
 
-Note that it uses `BufWritePost` and not `BufWritePre`. This is necessary when
-formatting asynchronously to not trigger a buffer change. `nvim-formatter` will
-re-save the buffer after inserting new changes. If you format it synchronously
-by setting `format_async = false` you may change `BufWritePost` to `BufWritePre`.
-You can also then change `FormatWrite` to `Format`. See the section about
-exposed commands
-
-Formatting on save with `format_async = true` will _not_ break `:wq` if you use
-`FormatWrite`. `nvim-formatter` sets an autocmd on `ExitPre` to make sure that
-the buffer is formatted before quitting. However, if the formatter can't finish
-in 5 seconds, it will timeout, exit and _not_ format the buffer
+For example, you can have a buffer variable that can toggle formatting on save
+on and off with:
 
 ```lua
-vim.api.nvim_create_autocmd('BufWritePost', {
-    group = vim.api.nvim_create_augroup('FormatOnWrite', { clear = true }),
-    pattern = '*.lua',
-    callback = function()
-        vim.cmd.FormatWrite()
+vim.keymap.set('n', '<leader>tf', function()
+    vim.b.disable_formatting = not vim.b.disable_formatting
+    if vim.b.disable_formatting then
+        vim.api.nvim_echo({ { 'Disabled autoformat on save' } }, false, {})
+    else
+        vim.api.nvim_echo({ { 'Enabled autoformat on save' } }, false, {})
+    end
+end, { desc = 'Format: Toggle format on save' })
+```
+
+You can then setup `nvim-formatter` like this
+
+```lua
+require('formatter').setup({
+    format_on_save = function()
+        return not vim.b.disable_formatting
     end,
 })
 ```
