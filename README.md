@@ -15,7 +15,9 @@ require('lazy').setup({
 
 ### Configure
 
-Each formatter should return a function that returns a table that consist of:
+To configure you need to set it up with each key in the table being the
+filetype, and the value being either a `string`, `table<string>` or a table
+consisting of the following keys.
 
 | Key                   | Type               | Meaning                                                                                                       |
 | --------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------- |
@@ -26,17 +28,32 @@ Each formatter should return a function that returns a table that consist of:
 | `disable_as_injected` | (string or table)? | Avoids formatting as an injected language with treesitter.<br/> Table of filetypes or a `*` for all filetypes |
 | `disable_injected`    | (string or table)? | Avoids formatting injected languages with treesitter.<br/> Table of filetypes or a `*` for all filetypes      |
 
-### Example:
+If you want to do some more advanced stuff for configuring the formatter for the
+language, the last option is to have a function return a structured table
+consisting of the keys above
+
+### Examples:
 
 ```lua
 require('formatter').setup({
     filetype = {
+        -- Returns a function that will run the first time it is formatting
         lua = function()
             return {
                 exe = 'stylua',
                 args = { '--search-parent-directories', '--stdin-filepath', vim.api.nvim_buf_get_name(0), '-' },
             }
         end,
+        -- Assumes this is `exe`
+        go = 'goimports',
+        -- Assumes the first value is `exe` and the rest is `args`
+        sql = { 'sql-formatter', '-l', 'postgresql' },
+        -- Will split on spaces and assumes the first is `exe` and rest is `args`
+        rust = 'rustfmt --edition 2021',
+        -- Returns a structured version
+        json = {
+            exe = 'jq',
+        },
     },
 })
 ```

@@ -1,7 +1,7 @@
 local M = {}
 
 ---@class Config
----@field filetype table<string, fun(): FiletypeConfig>
+---@field filetype table<string, fun(): FiletypeConfig> | string | table<string>
 ---@field format_async boolean
 ---@field format_on_save boolean | fun(): boolean
 
@@ -37,6 +37,30 @@ function M.get(key)
     return config
 end
 
+---@param conf string
+---@return FiletypeConfig
+local function string_config(conf)
+    local split = vim.split(conf, ' ')
+    return {
+        exe = split[1],
+        args = { unpack(split, 2, #split) },
+    }
+end
+
+---@param conf table<string> | FiletypeConfig
+---@return FiletypeConfig
+local function table_config(conf)
+    -- Assume the table is already structured
+    if conf.exe then
+        return conf
+    else
+        return {
+            exe = conf[1],
+            args = { unpack(conf, 2) },
+        }
+    end
+end
+
 ---@param ft string
 ---@return FiletypeConfig | nil
 function M.get_ft_config(ft)
@@ -45,7 +69,14 @@ function M.get_ft_config(ft)
         return ft_config[ft]
     end
     if f then
-        local conf = f()
+        local conf
+        if type(f) == 'string' then
+            conf = string_config(f)
+        elseif type(f) == 'table' then
+            conf = table_config(f)
+        else
+            conf = f()
+        end
         ft_config[ft] = conf
         return conf
     else
