@@ -18,7 +18,7 @@ local config = {
     format_async = true,
     format_on_save = false,
 }
-local ft_config = {}
+local buffer_config = {}
 
 ---@param opts Config
 ---@return Config
@@ -65,22 +65,21 @@ end
 ---@return FiletypeConfig | nil
 function M.get_ft_config(ft)
     local f = M.get('filetype')[ft]
-    if ft_config[ft] then
-        return ft_config[ft]
-    end
-    if f then
-        local conf
-        if type(f) == 'string' then
-            conf = string_config(f)
-        elseif type(f) == 'table' then
-            conf = table_config(f)
-        else
-            conf = f()
-        end
-        ft_config[ft] = conf
-        return conf
-    else
+    if not f then
         return nil
+    end
+    if type(f) == 'function' then
+        local bufnr = vim.api.nvim_get_current_buf()
+        if buffer_config[bufnr] then
+            return buffer_config[bufnr]
+        end
+        local conf = f()
+        buffer_config[bufnr] = conf
+        return conf
+    elseif type(f) == 'table' then
+        return table_config(f)
+    else
+        return string_config(f)
     end
 end
 
