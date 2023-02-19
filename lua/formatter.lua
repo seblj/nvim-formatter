@@ -10,14 +10,13 @@ function M.setup(opts)
     config.set(opts)
 
     if opts.format_on_save then
-        local group = vim.api.nvim_create_augroup('nvim-formatter_on_save', { clear = true })
         vim.api.nvim_create_autocmd('FileType', {
             pattern = vim.tbl_keys(opts.filetype),
-            group = group,
+            group = vim.api.nvim_create_augroup('nvim-formatter_on_save_ft', { clear = true }),
             callback = function()
                 vim.api.nvim_create_autocmd('BufWritePost', {
                     buffer = 0,
-                    group = group,
+                    group = vim.api.nvim_create_augroup('nvim-formatter_on_save_buf', { clear = true }),
                     callback = function()
                         if type(opts.format_on_save) == 'function' then
                             if opts.format_on_save() then
