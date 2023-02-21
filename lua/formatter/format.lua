@@ -89,6 +89,7 @@ function Format:insert()
     if not vim.deep_equal(self.current_output, self.input) then
         vim.schedule(function()
             if self.async and self.inital_changedtick ~= vim.api.nvim_buf_get_changedtick(0) then
+                self.is_formatting = false
                 return vim.notify(
                     string.format('Buffer changed while formatting'),
                     vim.log.levels.INFO,
@@ -113,10 +114,12 @@ end
 ---@param on_success fun(j)
 function Format:execute(conf, input, on_success)
     if vim.fn.executable(conf.exe) ~= 1 then
+        self.is_formatting = false
         return vim.notify(string.format('%s: executable not found', conf.exe), vim.log.levels.ERROR, util.notify_opts)
     end
 
     if conf.cond and not conf.cond() then
+        self.is_formatting = false
         return
     end
 
@@ -160,6 +163,7 @@ end
 ---@param run_treesitter boolean
 function Format:run_basic(run_treesitter)
     if not self.conf then
+        self.is_formatting = false
         return vim.notify(string.format('No config found for %s', vim.bo.ft), vim.log.levels.INFO, util.notify_opts)
     end
 
