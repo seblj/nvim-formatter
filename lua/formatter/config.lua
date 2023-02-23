@@ -1,7 +1,7 @@
 local M = {}
 
 ---@class Config
----@field filetype table<string, fun(): FiletypeConfig | string | table<string>>
+---@field filetype table<string, string | table<string> | fun(): FiletypeConfig>
 ---@field format_async boolean
 ---@field format_on_save boolean | fun(): boolean
 
