@@ -70,11 +70,15 @@ function M.get_ft_config(ft)
     end
     if type(f) == 'function' then
         local bufnr = vim.api.nvim_get_current_buf()
-        if buffer_config[bufnr] then
-            return buffer_config[bufnr]
+        -- Cache per ft in the buffer
+        if buffer_config[bufnr] and buffer_config[bufnr][ft] then
+            return buffer_config[bufnr][ft]
         end
         local conf = f()
-        buffer_config[bufnr] = conf
+        if not buffer_config[bufnr] then
+            buffer_config[bufnr] = {}
+        end
+        buffer_config[bufnr][ft] = conf
         return conf
     elseif type(f) == 'table' then
         return table_config(f)
