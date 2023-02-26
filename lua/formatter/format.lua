@@ -132,7 +132,7 @@ function Format:execute(conf, input, on_success)
     local job = require('plenary.job'):new({
         command = conf.exe,
         args = conf.args or {},
-        cwd = conf.cwd or vim.loop.cwd(),
+        cwd = conf.cwd or vim.fs.dirname(vim.api.nvim_buf_get_name(0)),
         writer = input,
         on_exit = function(j, exit_code)
             if exit_code ~= 0 then
