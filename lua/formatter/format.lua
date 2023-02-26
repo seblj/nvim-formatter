@@ -129,10 +129,11 @@ function Format:execute(conf, input, on_success)
         input = table.concat(input, '\n')
     end
 
+    local bufnr = vim.api.nvim_get_current_buf()
     local job = require('plenary.job'):new({
         command = conf.exe,
         args = conf.args or {},
-        cwd = conf.cwd or vim.fs.dirname(vim.api.nvim_buf_get_name(0)),
+        cwd = conf.cwd or vim.fs.dirname(vim.api.nvim_buf_get_name(bufnr)),
         writer = input,
         on_exit = function(j, exit_code)
             if exit_code ~= 0 then
