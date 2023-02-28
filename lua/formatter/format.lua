@@ -16,6 +16,8 @@ local util = require('formatter.util')
 ---@class Format
 ---@field start_line number
 ---@field end_line number
+---@field async boolean
+---@field inital_changedtick number
 ---@field bufnr number
 ---@field conf FiletypeConfig | nil
 ---@field is_formatting boolean
@@ -28,25 +30,26 @@ local Format = {}
 ---@param start_line? number
 ---@param end_line? number
 function Format:new(start_line, end_line)
-    setmetatable({}, self)
-    self.start_line = start_line or 1
-    self.end_line = end_line or -1
-    self.inital_changedtick = vim.api.nvim_buf_get_changedtick(0)
-    self.async = config.get('format_async')
+    local o = {}
+    setmetatable(o, { __index = self })
 
-    local input = vim.api.nvim_buf_get_lines(0, self.start_line - 1, self.end_line, false)
+    o.start_line = start_line or 1
+    o.end_line = end_line or -1
+    o.bufnr = vim.api.nvim_get_current_buf()
+    o.inital_changedtick = vim.api.nvim_buf_get_changedtick(o.bufnr)
+    o.async = config.get('format_async')
 
-    self.__index = self
-    self.is_formatting = false
-    self.bufnr = vim.api.nvim_get_current_buf()
-    self.calculated_injections = {}
+    local input = vim.api.nvim_buf_get_lines(o.bufnr, o.start_line - 1, o.end_line, false)
 
-    self.conf = config.get_ft_config(vim.bo.ft)
-    self.injections = {}
-    self.input = input
-    self.current_output = vim.deepcopy(input)
+    o.is_formatting = false
+    o.calculated_injections = {}
 
-    return self
+    o.conf = config.get_ft_config(vim.bo.ft)
+    o.injections = {}
+    o.input = input
+    o.current_output = vim.deepcopy(input)
+
+    return o
 end
 
 ---@param type "all" | "basic" | "injections"
@@ -88,7 +91,7 @@ end
 function Format:insert()
     if not vim.deep_equal(self.current_output, self.input) then
         vim.schedule(function()
-            if self.async and self.inital_changedtick ~= vim.api.nvim_buf_get_changedtick(0) then
+            if self.async and self.inital_changedtick ~= vim.api.nvim_buf_get_changedtick(self.bufnr) then
                 self.is_formatting = false
                 return vim.notify(
                     string.format('Buffer changed while formatting'),
