@@ -1,5 +1,4 @@
 local config = require('formatter.config')
-local parsers = require('nvim-treesitter.parsers')
 local util = require('formatter.util')
 
 ---@class Injection
@@ -269,9 +268,12 @@ end
 ---@param input table
 ---@return Injection[]
 function Format:find_injections(input)
+    local parsers = require('nvim-treesitter.parsers')
+
     local injections = {}
     local buf = vim.api.nvim_create_buf(false, true)
     vim.api.nvim_buf_set_lines(buf, 0, -1, false, input)
+
     local parser = parsers.get_parser(buf, parsers.ft_to_lang(vim.bo.ft))
     if not parser then
         return injections
