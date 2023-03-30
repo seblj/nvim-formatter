@@ -284,7 +284,7 @@ function Format:find_injections(input)
             local root = tree:root()
             local range = { root:range() }
             local start_line, end_line = range[1], range[3]
-            local ft = parsers.list.filetype or lang
+            local ft = parsers.list[lang] and parsers.list[lang].filetype or lang
             local conf = config.get_ft_config(ft)
             if conf and ft ~= vim.bo.ft and should_format(conf, ft) then
                 local text = vim.treesitter.get_node_text(root, buf)
