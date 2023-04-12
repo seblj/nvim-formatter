@@ -265,26 +265,37 @@ local function get_starting_newlines(text)
     return newlines
 end
 
+---@param lang string
+---@return string
+local function lang_to_ft(lang)
+    local fts = vim.treesitter.language.get_filetypes(lang)
+    for _, ft in ipairs(fts) do
+        if config.get_ft_config(ft) then
+            return ft
+        end
+    end
+    return vim.bo.ft
+end
+
 ---@param input table
 ---@return Injection[]
 function Format:find_injections(input)
-    local parsers = require('nvim-treesitter.parsers')
-
     local injections = {}
     local buf = vim.api.nvim_create_buf(false, true)
     vim.api.nvim_buf_set_lines(buf, 0, -1, false, input)
 
-    local parser = parsers.get_parser(buf, parsers.ft_to_lang(vim.bo.ft))
-    if not parser then
+    local parser_lang = vim.treesitter.language.get_lang(vim.bo.ft)
+    local ok, parser = pcall(vim.treesitter.get_parser, buf, parser_lang)
+    if not ok or not parser then
         return injections
     end
 
     for lang, child in pairs(parser:children()) do
-        for _, tree in ipairs(child._trees) do
+        for _, tree in ipairs(child:trees()) do
             local root = tree:root()
             local range = { root:range() }
             local start_line, end_line = range[1], range[3]
-            local ft = parsers.list[lang] and parsers.list[lang].filetype or lang
+            local ft = lang_to_ft(lang)
             local conf = config.get_ft_config(ft)
             if conf and ft ~= vim.bo.ft and should_format(conf, ft) then
                 local text = vim.treesitter.get_node_text(root, buf)

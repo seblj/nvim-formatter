@@ -2,6 +2,10 @@
 
 Formatter with treesitter integration
 
+## Requirements
+
+- Neovim 0.9
+
 ## Install
 
 Using your package manager of choice
