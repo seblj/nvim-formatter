@@ -143,11 +143,11 @@ function Format:execute(conf, input, on_success)
             if exit_code ~= 0 then
                 self.is_formatting = false
                 vim.schedule(function()
-                    vim.notify(
-                        string.format('Failed to format: %s', table.concat(j:stderr_result())),
-                        vim.log.levels.ERROR,
-                        util.notify_opts
-                    )
+                    local errmsg = j:stderr_result()
+                    errmsg = vim.tbl_isempty(errmsg) and j:result() or errmsg
+                    errmsg = vim.tbl_isempty(errmsg) and string.format('Failed to format with %s', conf.exe)
+                        or string.format('Failed to format with %s: %s', conf.exe, table.concat(errmsg))
+                    vim.notify(errmsg, vim.log.levels.ERROR, util.notify_opts)
                 end)
             else
                 on_success(j)
