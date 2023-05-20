@@ -4,6 +4,7 @@ local M = {}
 ---@field filetype table<string, string | table<string> | fun(): FiletypeConfig>
 ---@field format_async boolean
 ---@field format_on_save boolean | fun(): boolean
+---@field lsp string[]
 
 ---@class FiletypeConfig
 ---@field exe string
@@ -17,6 +18,7 @@ local M = {}
 local config = {
     format_async = true,
     format_on_save = false,
+    lsp = {},
 }
 local buffer_config = {}
 

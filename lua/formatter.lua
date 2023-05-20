@@ -33,6 +33,33 @@ function M.setup(opts)
                 })
             end,
         })
+
+        if opts.lsp then
+            vim.api.nvim_create_autocmd('LspAttach', {
+                callback = function(args)
+                    local client = vim.lsp.get_client_by_id(args.data.client_id)
+                    if vim.tbl_contains(opts.lsp, client.name) then
+                        vim.api.nvim_create_autocmd('BufWritePre', {
+                            group = vim.api.nvim_create_augroup(
+                                string.format('nvim-formatter_lsp_on_save_buf_%s', args.buf),
+                                { clear = true }
+                            ),
+                            buffer = args.buf,
+                            callback = function()
+                                if type(opts.format_on_save) == 'function' then
+                                    if opts.format_on_save() then
+                                        vim.lsp.buf.format()
+                                    end
+                                else
+                                    vim.lsp.buf.format()
+                                end
+                            end,
+                            desc = 'nvim-formatter lsp formatting',
+                        })
+                    end
+                end,
+            })
+        end
     end
 
     local arguments = { 'basic', 'injections' }
