@@ -115,7 +115,7 @@ end
 
 ---@param conf FiletypeConfig
 ---@param input string[]|string
----@param on_success fun(j)
+---@param on_success fun(stdout:string[])
 function Format:execute(conf, input, on_success)
     if vim.fn.executable(conf.exe) ~= 1 then
         self.is_formatting = false
@@ -127,18 +127,12 @@ function Format:execute(conf, input, on_success)
         return
     end
 
-    -- `get_node_text` returns string[] | string. Guard against trying to concat
-    -- a string which will give an error
-    if type(input) == 'table' then
-        input = table.concat(input, '\n')
-    end
-
-    local bufnr = vim.api.nvim_get_current_buf()
     local job = require('plenary.job'):new({
         command = conf.exe,
         args = conf.args or {},
-        cwd = conf.cwd or vim.fs.dirname(vim.api.nvim_buf_get_name(bufnr)),
-        writer = input,
+        cwd = conf.cwd or vim.fs.dirname(vim.api.nvim_buf_get_name(self.bufnr)),
+        -- `get_node_text` returns string[] | string
+        writer = type(input) == 'table' and table.concat(input, '\n') or input,
         on_exit = function(j, exit_code)
             if exit_code ~= 0 then
                 self.is_formatting = false
@@ -150,7 +144,7 @@ function Format:execute(conf, input, on_success)
                     vim.notify(errmsg, vim.log.levels.ERROR, util.notify_opts)
                 end)
             else
-                on_success(j)
+                on_success(j:result())
             end
         end,
     })
@@ -172,8 +166,8 @@ function Format:run_basic(run_treesitter)
         return vim.notify(string.format('No config found for %s', vim.bo.ft), vim.log.levels.INFO, util.notify_opts)
     end
 
-    self:execute(self.conf, self.current_output, function(j)
-        self.current_output = j:result()
+    self:execute(self.conf, self.current_output, function(stdout)
+        self.current_output = stdout
         if run_treesitter then
             vim.schedule(function()
                 self:run_injections()
@@ -203,10 +197,10 @@ function Format:run_injections()
     self.injections = self:find_injections(self.current_output)
     if #self.injections > 0 then
         for _, injection in ipairs(self.injections) do
-            self:execute(injection.conf, injection.input, function(j)
+            self:execute(injection.conf, injection.input, function(stdout)
                 table.insert(
                     self.calculated_injections,
-                    { output = j:result(), start_line = injection.start_line, end_line = injection.end_line }
+                    { output = stdout, start_line = injection.start_line, end_line = injection.end_line }
                 )
                 if #self.calculated_injections == #self.injections then
                     self:set_current_output()
