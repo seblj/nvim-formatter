@@ -113,6 +113,70 @@ function Format:insert()
     end
 end
 
+-- Remove and inline once `vim.system` is in an official release
+function Format:system(conf, input, on_success)
+    local spec = {
+        cmd = conf.exe, -- vim.system
+        command = conf.exe, -- plenary
+        args = conf.args,
+        cwd = conf.cwd or vim.fs.dirname(vim.api.nvim_buf_get_name(self.bufnr)),
+        -- `get_node_text` returns string[] | string
+        stdin = type(input) == 'table' and table.concat(input, '\n') or input, -- vim.system
+        writer = type(input) == 'table' and table.concat(input, '\n') or input, -- plenary
+    }
+    if vim.system then
+        local on_exit = function(out)
+            if out.code ~= 0 then
+                self.is_formatting = false
+                vim.schedule(function()
+                    local errmsg = out.stderr and out.stderr or out.stdout
+                    vim.notify(
+                        string.format('Failed to format with %s%s', conf.exe, errmsg and ': ' .. errmsg or ''),
+                        vim.log.levels.ERROR,
+                        util.notify_opts
+                    )
+                end)
+            else
+                local stdout = out.stdout:gsub('\r', ''):gmatch('([^\n]*)\n')
+                local output = vim.iter(stdout):fold({}, function(t, k)
+                    table.insert(t, k)
+                    return t
+                end)
+                on_success(output)
+            end
+        end
+
+        local out = vim.system(spec, self.async and on_exit or nil)
+        if not self.async then
+            ---@diagnostic disable-next-line: need-check-nil
+            on_exit(out)
+        end
+    else
+        local job = require('plenary.job'):new(vim.tbl_extend('force', spec, {
+            on_exit = function(j, exit_code)
+                if exit_code ~= 0 then
+                    self.is_formatting = false
+                    vim.schedule(function()
+                        local errmsg = j:stderr_result()
+                        errmsg = vim.tbl_isempty(errmsg) and j:result() or errmsg
+                        errmsg = vim.tbl_isempty(errmsg) and string.format('Failed to format with %s', conf.exe)
+                            or string.format('Failed to format with %s: %s', conf.exe, table.concat(errmsg))
+                        vim.notify(errmsg, vim.log.levels.ERROR, util.notify_opts)
+                    end)
+                else
+                    on_success(j:result())
+                end
+            end,
+        }))
+
+        if self.async then
+            job:start()
+        else
+            job:sync()
+        end
+    end
+end
+
 ---@param conf FiletypeConfig
 ---@param input string[]|string
 ---@param on_success fun(stdout:string[])
@@ -127,33 +191,7 @@ function Format:execute(conf, input, on_success)
         return
     end
 
-    local job = require('plenary.job'):new({
-        command = conf.exe,
-        args = conf.args or {},
-        cwd = conf.cwd or vim.fs.dirname(vim.api.nvim_buf_get_name(self.bufnr)),
-        -- `get_node_text` returns string[] | string
-        writer = type(input) == 'table' and table.concat(input, '\n') or input,
-        on_exit = function(j, exit_code)
-            if exit_code ~= 0 then
-                self.is_formatting = false
-                vim.schedule(function()
-                    local errmsg = j:stderr_result()
-                    errmsg = vim.tbl_isempty(errmsg) and j:result() or errmsg
-                    errmsg = vim.tbl_isempty(errmsg) and string.format('Failed to format with %s', conf.exe)
-                        or string.format('Failed to format with %s: %s', conf.exe, table.concat(errmsg))
-                    vim.notify(errmsg, vim.log.levels.ERROR, util.notify_opts)
-                end)
-            else
-                on_success(j:result())
-            end
-        end,
-    })
-
-    if self.async then
-        job:start()
-    else
-        job:sync()
-    end
+    self:system(conf, input, on_success)
 end
 
 ---Runs basic formatter for buffer.
