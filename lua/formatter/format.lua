@@ -1,7 +1,7 @@
 -- Use implementation from this PR
 -- https://github.com/neovim/neovim/pull/23827
 -- Remove once it's in an official release
-require("formatter.system")
+require('formatter.system')
 local config = require('formatter.config')
 local util = require('formatter.util')
 
@@ -144,10 +144,10 @@ function Format:execute(conf, input, on_success)
             end)
         else
             local stdout = out.stdout:gsub('\r', ''):gmatch('([^\n]*)\n')
-            local output = vim.iter(stdout):fold({}, function(t, k)
-                table.insert(t, k)
-                return t
-            end)
+            local output = {}
+            for k in stdout do
+                table.insert(output, k)
+            end
             on_success(output)
         end
     end
