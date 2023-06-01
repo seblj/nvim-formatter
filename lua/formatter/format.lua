@@ -1,3 +1,7 @@
+-- Use implementation from this PR
+-- https://github.com/neovim/neovim/pull/23827
+-- Remove once it's in an official release
+require("formatter.system")
 local config = require('formatter.config')
 local util = require('formatter.util')
 
@@ -127,32 +131,37 @@ function Format:execute(conf, input, on_success)
         return
     end
 
-    local job = require('plenary.job'):new({
-        command = conf.exe,
-        args = conf.args or {},
+    local on_exit = function(out)
+        if out.code ~= 0 then
+            self.is_formatting = false
+            vim.schedule(function()
+                local errmsg = out.stderr and out.stderr or out.stdout
+                vim.notify(
+                    string.format('Failed to format with %s%s', conf.exe, errmsg and ': ' .. errmsg or ''),
+                    vim.log.levels.ERROR,
+                    util.notify_opts
+                )
+            end)
+        else
+            local stdout = out.stdout:gsub('\r', ''):gmatch('([^\n]*)\n')
+            local output = vim.iter(stdout):fold({}, function(t, k)
+                table.insert(t, k)
+                return t
+            end)
+            on_success(output)
+        end
+    end
+
+    local out = vim.system({
+        cmd = conf.exe,
+        args = conf.args,
         cwd = conf.cwd or vim.fs.dirname(vim.api.nvim_buf_get_name(self.bufnr)),
         -- `get_node_text` returns string[] | string
-        writer = type(input) == 'table' and table.concat(input, '\n') or input,
-        on_exit = function(j, exit_code)
-            if exit_code ~= 0 then
-                self.is_formatting = false
-                vim.schedule(function()
-                    local errmsg = j:stderr_result()
-                    errmsg = vim.tbl_isempty(errmsg) and j:result() or errmsg
-                    errmsg = vim.tbl_isempty(errmsg) and string.format('Failed to format with %s', conf.exe)
-                        or string.format('Failed to format with %s: %s', conf.exe, table.concat(errmsg))
-                    vim.notify(errmsg, vim.log.levels.ERROR, util.notify_opts)
-                end)
-            else
-                on_success(j:result())
-            end
-        end,
-    })
-
-    if self.async then
-        job:start()
-    else
-        job:sync()
+        stdin = type(input) == 'table' and table.concat(input, '\n') or input,
+    }, self.async and on_exit or nil)
+    if not self.async then
+        ---@diagnostic disable-next-line: need-check-nil
+        on_exit(out)
     end
 end
 
