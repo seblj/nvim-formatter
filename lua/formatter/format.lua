@@ -143,25 +143,21 @@ function Format:execute(conf, input, on_success)
                 )
             end)
         else
-            local stdout = out.stdout:gsub('\r', ''):gmatch('([^\n]*)\n')
             local output = {}
-            for k in stdout do
+            for k in out.stdout:gmatch('([^\n]*)\n') do
                 table.insert(output, k)
             end
             on_success(output)
         end
     end
 
-    local out = vim.system({
-        cmd = conf.exe,
-        args = conf.args,
+    local out = vim.system({ conf.exe, unpack(conf.args) }, {
         cwd = conf.cwd or vim.fs.dirname(vim.api.nvim_buf_get_name(self.bufnr)),
         -- `get_node_text` returns string[] | string
         stdin = type(input) == 'table' and table.concat(input, '\n') or input,
     }, self.async and on_exit or nil)
     if not self.async then
-        ---@diagnostic disable-next-line: need-check-nil
-        on_exit(out)
+        on_exit(out:wait())
     end
 end
 

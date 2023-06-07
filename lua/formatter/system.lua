@@ -1,277 +1,348 @@
 -- Use the implementation from this PR
--- https://github.com/neovim/neovim/pull/23827/files
--- Remove once merged an in an official release
+-- https://github.com/neovim/neovim/pull/23827
+-- Remove once merged and in an official release
 
 if not vim.system then
-    local uv = vim.loop
+    local uv = vim.uv or vim.loop
 
-    --- @param spec string[]|SystemSpec
-    --- @return SystemSpec
-    local function process_spec(spec)
-        if spec[1] then
-            local cmd = {} --- @type string[]
-            for _, p in ipairs(spec) do
-                cmd[#cmd + 1] = p
-            end
-            spec = vim.deepcopy(spec)
-            spec.cmd = cmd
-        end
+    --- @class SystemOpts
+    --- @field cmd string[]
+    --- @field stdin string|string[]|true
+    --- @field stdout fun(err:string, data: string)|false
+    --- @field stderr fun(err:string, data: string)|false
+    --- @field cwd? string
+    --- @field env? table<string,string|number>
+    --- @field clear_env? boolean
+    --- @field text boolean?
+    --- @field timeout? integer Timeout in ms
+    --- @field detach? boolean
 
-        return spec
-    end
+    --- @class SystemCompleted
+    --- @field code integer
+    --- @field signal integer
+    --- @field stdout? string
+    --- @field stderr? string
 
-    ---@private
-    ---@param output uv_stream_t|function|'false'
-    ---@return uv_stream_t?
-    ---@return function? Handler
-    ---@return boolean: Use handler
-    local function setup_output(output)
-        if output == nil then
-            return assert(uv.new_pipe(false)), nil, true
-        end
-
-        if type(output) == 'function' then
-            return assert(uv.new_pipe(false)), output, true
-        end
-
-        if output == false then
-            return nil, nil, false
-        end
-
-        --- @cast output uv_stream_t
-
-        -- output must be uv_stream_t
-        return output, nil, false
-    end
+    --- @class SystemState
+    --- @field handle uv_process_t
+    --- @field timer uv_timer_t
+    --- @field pid integer
+    --- @field timeout? integer
+    --- @field done boolean
+    --- @field stdin uv_stream_t?
+    --- @field stdout uv_stream_t?
+    --- @field stderr uv_stream_t?
+    --- @field cmd string[]
+    --- @field result? SystemCompleted
 
     ---@private
-    ---@param input uv_stream_t|string|string[]|nil
-    ---@return uv_stream_t?
-    ---@return string|string[]?
-    local function setup_input(input)
-        if type(input) == 'string' or type(input) == 'table' then
-            return assert(uv.new_pipe(false)), input
-        end
-
-        -- output must be uv_stream_t
-        return input, nil
-    end
-
-    --- @param cmd string|string[]
-    --- @param args? string[]
-    --- @return string Command
-    --- @return string[]? Arguments
-    local function setup_cmd(cmd, args)
-        if type(cmd) == 'string' then
-            cmd = { cmd }
-            if args then
-                vim.list_extend(cmd, args)
-            end
-        end
-
-        return cmd[1], vim.list_slice(cmd, 2)
-    end
-
-    --- uv.spawn will completely overwrite the environment
-    --- when we just want to modify the existing one, so if env is provided
-    --- make sure to prepopulate it with the current env.
-    --- @param env table<string,string|number>
-    --- @return string[]?
-    local function setup_env(env)
-        if not env then
-            return
-        end
-
-        --- @type table<string,string>
-        local env0 = vim.tbl_extend('force', vim.fn.environ(), env)
-
-        local renv = {} --- @type string[]
-        for k, v in pairs(env0) do
-            renv[#renv + 1] = string.format('%s=%s', k, tostring(v))
-        end
-
-        return renv
-    end
-
-    ---@private
-    ---@param pipe uv_stream_t
-    ---@param input? string|string[]
-    local function handle_input(pipe, input)
-        if type(input) == 'table' then
-            for _, v in ipairs(input) do
-                pipe:write(v)
-                pipe:write('\n')
-            end
-        elseif type(input) == 'string' then
-            pipe:write(input)
-        end
-
-        -- Shutdown the write side of the duplex stream and then close the pipe.
-        -- Note shutdown will wait for all the pending write requests to complete
-        -- TODO(lewis6991): apparently shutdown doesn't behave this way.
-        -- (https://github.com/neovim/neovim/pull/17620#discussion_r820775616)
-        pipe:write('', function()
-            pipe:shutdown(function()
-                if pipe then
-                    pipe:close()
-                end
-            end)
-        end)
-    end
-
-    ---@private
-    ---@param pipe uv_stream_t
-    ---@param handler? function
-    ---@param output string[]
-    local function handle_output(pipe, handler, output)
-        if handler then
-            pipe:read_start(handler)
-        else
-            pipe:read_start(function(err, data)
-                if err then
-                    error(err)
-                end
-                output[#output + 1] = data
-            end)
-        end
-    end
-
-    ---@private
-    ---@param handles uv_handle_t[]
-    local function close_handles(handles)
-        for _, handle in pairs(handles) do
+    ---@param state SystemState
+    local function close_handles(state)
+        for _, handle in pairs({ state.handle, state.stdin, state.stdout, state.stderr }) do
             if not handle:is_closing() then
                 handle:close()
             end
         end
     end
 
-    --- @class SystemSpec
-    --- @field cmd string|string[]
-    --- @field args? string[]
-    --- @field stdin string|string[]|uv_stream_t
-    --- @field stdout uv_stream_t|fun(err:string, data: string)|'false'
-    --- @field stderr uv_stream_t|fun(err:string, data: string)|'false'
-    --- @field cwd? string
-    --- @field env? table<string,string|number>
-    --- @field timeout? integer Timeout in ms
-    --- @field detached? boolean
-    ---
-    --- @class SystemOut
-    --- @field code integer
-    --- @field signal integer
-    --- @field stdout? string
-    --- @field stderr? string
+    --- @param cmd string[]
+    --- @return SystemCompleted
+    local function timeout_result(cmd)
+        local cmd_str = table.concat(cmd, ' ')
+        local err = string.format("Command timed out: '%s'", cmd_str)
+        return { code = 0, signal = 2, stdout = '', stderr = err }
+    end
+
+    --- @class SystemObj
+    --- @field pid integer
+    --- @field private _state SystemState
+    --- @field wait fun(self: SystemObj, timeout?: integer): SystemCompleted
+    --- @field kill fun(self: SystemObj, signal: integer)
+    --- @field write fun(self: SystemObj, data?: string|string[])
+    --- @field is_closing fun(self: SystemObj): boolean?
+    local SystemObj = {}
+
+    --- @param state SystemState
+    --- @return SystemObj
+    local function new_systemobj(state)
+        return setmetatable({
+            pid = state.pid,
+            _state = state,
+        }, { __index = SystemObj })
+    end
+
+    --- @param signal integer
+    function SystemObj:kill(signal)
+        local state = self._state
+        state.handle:kill(signal)
+        close_handles(state)
+    end
+
+    local MAX_TIMEOUT = 2 ^ 31
+
+    --- @param timeout? integer
+    --- @return SystemCompleted
+    function SystemObj:wait(timeout)
+        local state = self._state
+
+        vim.wait(timeout or state.timeout or MAX_TIMEOUT, function()
+            return state.done
+        end)
+
+        if not state.done then
+            self:kill(6) -- 'sigint'
+            state.result = timeout_result(state.cmd)
+        end
+
+        return state.result
+    end
+
+    --- @param data string[]|string|nil
+    function SystemObj:write(data)
+        local stdin = self._state.stdin
+
+        if not stdin then
+            error('stdin has not been opened on this object')
+        end
+
+        if type(data) == 'table' then
+            for _, v in ipairs(data) do
+                stdin:write(v)
+                stdin:write('\n')
+            end
+        elseif type(data) == 'string' then
+            stdin:write(data)
+        elseif data == nil then
+            -- Shutdown the write side of the duplex stream and then close the pipe.
+            -- Note shutdown will wait for all the pending write requests to complete
+            -- TODO(lewis6991): apparently shutdown doesn't behave this way.
+            -- (https://github.com/neovim/neovim/pull/17620#discussion_r820775616)
+            stdin:write('', function()
+                stdin:shutdown(function()
+                    if stdin then
+                        stdin:close()
+                    end
+                end)
+            end)
+        end
+    end
+
+    --- @return boolean
+    function SystemObj:is_closing()
+        local handle = self._state.handle
+        return handle == nil or handle:is_closing()
+    end
+
+    ---@private
+    ---@param output function|'false'
+    ---@return uv_stream_t?
+    ---@return function? Handler
+    local function setup_output(output)
+        if output == nil then
+            return assert(uv.new_pipe(false)), nil
+        end
+
+        if type(output) == 'function' then
+            return assert(uv.new_pipe(false)), output
+        end
+
+        assert(output == false)
+        return nil, nil
+    end
+
+    ---@private
+    ---@param input string|string[]|true|nil
+    ---@return uv_stream_t?
+    ---@return string|string[]?
+    local function setup_input(input)
+        if not input then
+            return
+        end
+
+        local towrite --- @type string|string[]?
+        if type(input) == 'string' or type(input) == 'table' then
+            towrite = input
+        end
+
+        return assert(uv.new_pipe(false)), towrite
+    end
+
+    --- @return table<string,string>
+    local function base_env()
+        local env = vim.fn.environ()
+        env['NVIM'] = vim.v.servername
+        env['NVIM_LISTEN_ADDRESS'] = nil
+        return env
+    end
+
+    --- uv.spawn will completely overwrite the environment
+    --- when we just want to modify the existing one, so
+    --- make sure to prepopulate it with the current env.
+    --- @param env? table<string,string|number>
+    --- @param clear_env? boolean
+    --- @return string[]?
+    local function setup_env(env, clear_env)
+        if clear_env then
+            return env
+        end
+
+        --- @type table<string,string|number>
+        env = vim.tbl_extend('force', base_env(), env or {})
+
+        local renv = {} --- @type string[]
+        for k, v in pairs(env) do
+            renv[#renv + 1] = string.format('%s=%s', k, tostring(v))
+        end
+
+        return renv
+    end
+
+    --- @param stream uv_stream_t
+    --- @param text? boolean
+    --- @param bucket string[]
+    --- @return fun(err: string?, data: string?)
+    local function default_handler(stream, text, bucket)
+        return function(err, data)
+            if err then
+                error(err)
+            end
+            if data ~= nil then
+                if text then
+                    bucket[#bucket + 1] = data:gsub('\r\n', '\n')
+                else
+                    bucket[#bucket + 1] = data
+                end
+            else
+                stream:read_stop()
+                stream:close()
+            end
+        end
+    end
+
+    local M = {}
+
+    --- @param cmd string
+    --- @param opts uv.aliases.spawn_options
+    --- @param on_exit fun(code: integer, signal: integer)
+    --- @param on_error fun()
+    --- @return uv_process_t, integer
+    local function spawn(cmd, opts, on_exit, on_error)
+        local handle, pid_or_err = uv.spawn(cmd, opts, on_exit)
+        if not handle then
+            on_error()
+            error(pid_or_err)
+        end
+        return handle, pid_or_err --[[@as integer]]
+    end
 
     --- Run a system command
     ---
-    --- @param user_spec string[]|SystemSpec
-    --- @param on_exit fun(out: SystemOut)|nil
-    --- @return uv_process_t|nil, integer|string process handle and PID
-    --- @overload fun(user_spec: string[]|SystemSpec): SystemOut
-    function vim.system(user_spec, on_exit)
+    --- @param cmd string[]
+    --- @param opts? SystemOpts
+    --- @param on_exit? fun(out: SystemCompleted)
+    --- @return SystemObj
+    function M.run(cmd, opts, on_exit)
         vim.validate({
-            user_spec = { user_spec, 'table' },
+            cmd = { cmd, 'table' },
+            opts = { opts, 'table', true },
             on_exit = { on_exit, 'function', true },
         })
 
-        local spec = process_spec(user_spec)
+        opts = opts or {}
 
-        local stdout, stdout_handler, handle_stdout = setup_output(spec.stdout)
-        local stderr, stderr_handler, handle_stderr = setup_output(spec.stderr)
-        local stdin, input = setup_input(spec.stdin)
-        local cmd, args = setup_cmd(spec.cmd, spec.args)
+        local stdout, stdout_handler = setup_output(opts.stdout)
+        local stderr, stderr_handler = setup_output(opts.stderr)
+        local stdin, towrite = setup_input(opts.stdin)
 
-        -- Pipes which are being automatically managed.
-        -- Don't manage if pipe was passed directly in spec
-        local pipes = {} --- @type uv_handle_t[]
-
-        if input then
-            pipes[#pipes + 1] = stdin
-        end
-
-        if handle_stdout then
-            pipes[#pipes + 1] = stdout
-        end
-
-        if handle_stderr then
-            pipes[#pipes + 1] = stderr
-        end
+        --- @type SystemState
+        local state = {
+            done = false,
+            cmd = cmd,
+            timeout = opts.timeout,
+            stdin = stdin,
+            stdout = stdout,
+            stderr = stderr,
+        }
 
         -- Define data buckets as tables and concatenate the elements at the end as
         -- one operation.
         --- @type string[], string[]
         local stdout_data, stderr_data
 
-        local done = false
-        local out --- @type SystemOut
-
-        local handle, pid
-        handle, pid = uv.spawn(cmd, {
-            args = args,
+        state.handle, state.pid = spawn(cmd[1], {
+            args = vim.list_slice(cmd, 2),
             stdio = { stdin, stdout, stderr },
-            cwd = spec.cwd,
-            env = setup_env(spec.env),
-            detached = spec.detached,
+            cwd = opts.cwd,
+            env = setup_env(opts.env, opts.clear_env),
+            detached = opts.detach,
+            hide = true,
         }, function(code, signal)
-            close_handles(pipes)
-            if handle then
-                handle:close()
+            close_handles(state)
+            if state.timer then
+                state.timer:stop()
+                state.timer:close()
             end
-            done = true
 
-            local ret = {
-                code = code,
-                signal = signal,
-                stdout = stdout_data and table.concat(stdout_data) or nil,
-                stderr = stderr_data and table.concat(stderr_data) or nil,
-            }
+            local check = assert(uv.new_check())
 
-            if on_exit then
-                on_exit(ret)
-            else
-                out = ret
-            end
+            check:start(function()
+                for _, pipe in pairs({ state.stdin, state.stdout, state.stderr }) do
+                    if not pipe:is_closing() then
+                        return
+                    end
+                end
+                check:stop()
+
+                state.done = true
+                state.result = {
+                    code = code,
+                    signal = signal,
+                    stdout = stdout_data and table.concat(stdout_data) or nil,
+                    stderr = stderr_data and table.concat(stderr_data) or nil,
+                }
+
+                if on_exit then
+                    on_exit(state.result)
+                end
+            end)
+        end, function()
+            close_handles(state)
         end)
 
-        if not handle then
-            close_handles(pipes)
-            error(pid)
-        end
-
-        if stdout and handle_stdout then
+        if stdout then
             stdout_data = {}
-            handle_output(stdout, stdout_handler, stdout_data)
+            stdout:read_start(stdout_handler or default_handler(stdout, opts.text, stdout_data))
         end
 
-        if stderr and handle_stderr then
+        if stderr then
             stderr_data = {}
-            handle_output(stderr, stderr_handler, stderr_data)
+            stderr:read_start(stderr_handler or default_handler(stderr, opts.text, stderr_data))
         end
 
-        if input then
-            handle_input(assert(stdin), input)
+        local obj = new_systemobj(state)
+
+        if towrite then
+            obj:write(towrite)
+            obj:write(nil) -- close the stream
         end
 
-        if on_exit then
-            -- TODO(lewis6991): implement timeout for async
-            return handle, pid
+        if opts.timeout then
+            state.timer = assert(uv.new_timer())
+            state.timer:start(opts.timeout, 0, function()
+                state.timer:stop()
+                state.timer:close()
+                if state.handle and state.handle:is_active() then
+                    obj:kill(6) --- 'sigint'
+                    state.result = timeout_result(state.cmd)
+                    if on_exit then
+                        on_exit(state.result)
+                    end
+                end
+            end)
         end
 
-        vim.wait(spec.timeout or 10000, function()
-            return done
-        end)
-
-        if not done then
-            if handle then
-                close_handles(pipes)
-                handle:close()
-            end
-
-            local cmd_str = cmd .. ' ' .. table.concat(args or {}, ' ')
-            error(string.format('System command timed out: %s', cmd_str))
-        end
-
-        return out
+        return obj
     end
+
+    return M
 end
