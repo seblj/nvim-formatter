@@ -1,7 +1,7 @@
 -- Use implementation from this PR
 -- https://github.com/neovim/neovim/pull/23827
 -- Remove once it's in an official release
-require('formatter.system')
+local system = vim.system or require('formatter.system').run
 local config = require('formatter.config')
 local util = require('formatter.util')
 
@@ -151,7 +151,7 @@ function Format:execute(conf, input, on_success)
         end
     end
 
-    local out = vim.system({ conf.exe, unpack(conf.args) }, {
+    local out = system({ conf.exe, unpack(conf.args) }, {
         cwd = conf.cwd or vim.fs.dirname(vim.api.nvim_buf_get_name(self.bufnr)),
         -- `get_node_text` returns string[] | string
         stdin = type(input) == 'table' and table.concat(input, '\n') or input,
