@@ -144,7 +144,8 @@ function Format:execute(conf, input, on_success)
             end)
         else
             local output = {}
-            for k in out.stdout:gmatch('([^\n]*)\n') do
+            local stdout = out.stdout:sub(-1) == '\n' and out.stdout or out.stdout .. '\n'
+            for k in stdout:gmatch('([^\n]*)\n') do
                 table.insert(output, k)
             end
             on_success(output)
