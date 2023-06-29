@@ -19,8 +19,11 @@ require('lazy').setup({
 ### Configure
 
 To configure you need to set it up with each key in the table being the
-filetype, and the value being either a `string`, `table<string>` or a table
-consisting of the following keys.
+filetype, and the value being a `string`. You can use `string.format()` to do
+more advanced arguments.
+
+However, if you want even more control, you can also create a function that
+returns either a string or a table with the following keys.
 
 | Key                   | Type               | Meaning                                                                                                       |
 | --------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------- |
@@ -30,10 +33,6 @@ consisting of the following keys.
 | `cwd`                 | string?            | The path to run the program from                                                                              |
 | `disable_as_injected` | (string or table)? | Avoids formatting as an injected language with treesitter.<br/> Table of filetypes or a `*` for all filetypes |
 | `disable_injected`    | (string or table)? | Avoids formatting injected languages with treesitter.<br/> Table of filetypes or a `*` for all filetypes      |
-
-If you want to do some more advanced stuff for configuring the formatter for the
-language, the last option is to have a function return a structured table
-consisting of the keys above
 
 ### Examples:
 
@@ -49,13 +48,38 @@ require('formatter').setup({
         end,
         -- Assumes this is `exe`
         go = 'goimports',
-        -- Assumes the first value is `exe` and the rest is `args`
-        sql = { 'sql-formatter', '-l', 'postgresql' },
         -- Will split on spaces and assumes the first is `exe` and rest is `args`
         rust = 'rustfmt --edition 2021',
-        -- Returns a structured version
-        json = {
-            exe = 'jq',
+    },
+})
+```
+
+### Multiple formatters per filetype
+
+If you like to run multiple formatters per filetype, the value of a filetype
+could be a table of formatters. This runs stylua first, then runs luafmt. Note
+that you probably do NOT want to run multiple formatters. I implemented this
+specifically for my own purpose of wanting to format
+[`leptos`](https://github.com/leptos-rs/leptos) in Rust using
+[`leptosfmt`](https://github.com/bram209/leptosfmt) while still also format
+using [`rustfmt`](https://github.com/rust-lang/rustfmt)
+
+```lua
+require('formatter').setup({
+    filetype = {
+        -- Two formatters, and both configured as strings
+        lua = {
+            'stylua --search-parent-directories -',
+            'luafmt --stdin',
+        },
+
+        -- Two formatters where one is configured as a function and the other as
+        -- a string
+        lua = {
+            'stylua --search-parent-directories -',
+            function()
+                return 'luafmt --stdin'
+            end,
         },
     },
 })

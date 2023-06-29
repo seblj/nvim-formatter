@@ -8,7 +8,7 @@ local util = require('formatter.util')
 ---@class Injection
 ---@field start_line number
 ---@field end_line number
----@field conf FiletypeConfig
+---@field confs FiletypeConfig[]
 ---@field input string[]|string
 
 ---@class FormattedInjection
@@ -22,7 +22,7 @@ local util = require('formatter.util')
 ---@field async boolean
 ---@field inital_changedtick number
 ---@field bufnr number
----@field conf FiletypeConfig | nil
+---@field confs FiletypeConfig | nil
 ---@field is_formatting boolean
 ---@field calculated_injections FormattedInjection[]
 ---@field injections Injection[]
@@ -47,7 +47,7 @@ function Format:new(start_line, end_line)
     o.is_formatting = false
     o.calculated_injections = {}
 
-    o.conf = config.get_ft_config(vim.bo.ft)
+    o.confs = config.get_ft_configs(vim.bo.ft)
     o.injections = {}
     o.input = input
     o.current_output = vim.deepcopy(input)
@@ -57,7 +57,7 @@ end
 
 ---@param type "all" | "basic" | "injections"
 ---@param exit_pre? boolean Whether to set ExitPre autocmd or not
-function Format:run(type, exit_pre)
+function Format:start(type, exit_pre)
     if not vim.bo.modifiable then
         return vim.notify('Buffer is not modifiable', vim.log.levels.INFO, util.notify_opts)
     end
@@ -78,7 +78,7 @@ function Format:run(type, exit_pre)
 
     if type == 'all' then
         -- Only try to run injections if there is no config for vim.bo.ft
-        if self.conf then
+        if self.confs then
             self:run_basic(true)
         else
             self:run_injections()
@@ -86,6 +86,9 @@ function Format:run(type, exit_pre)
     elseif type == 'injections' then
         self:run_injections()
     elseif type == 'basic' then
+        if not self.confs then
+            return vim.notify(string.format('No config found for %s', vim.bo.ft), vim.log.levels.INFO, util.notify_opts)
+        end
         self:run_basic(false)
     end
 end
@@ -162,25 +165,30 @@ function Format:execute(conf, input, on_success)
     end
 end
 
+function Format:run(conf, confs, out, f)
+    if not confs[conf] then
+        return f(out)
+    end
+    self:execute(confs[conf], out, function(stdout)
+        vim.schedule(function()
+            self:run(conf + 1, confs, stdout, f)
+        end)
+    end)
+end
+
 ---Runs basic formatter for buffer.
 ---Tries to run formatter for treesitter injections. Will insert into buffer
 ---later when formatting injections
 ---@param run_treesitter boolean
 function Format:run_basic(run_treesitter)
-    if not self.conf then
-        self.is_formatting = false
-        return vim.notify(string.format('No config found for %s', vim.bo.ft), vim.log.levels.INFO, util.notify_opts)
-    end
-
-    self:execute(self.conf, self.current_output, function(stdout)
-        self.current_output = stdout
+    self:run(1, self.confs, self.current_output, function(out)
+        self.current_output = out
         if run_treesitter then
-            vim.schedule(function()
+            return vim.schedule(function()
                 self:run_injections()
             end)
-        else
-            self:insert()
         end
+        return self:insert()
     end)
 end
 
@@ -203,10 +211,10 @@ function Format:run_injections()
     self.injections = self:find_injections(self.current_output)
     if #self.injections > 0 then
         for _, injection in ipairs(self.injections) do
-            self:execute(injection.conf, injection.input, function(stdout)
+            self:run(1, injection.confs, injection.input, function(out)
                 table.insert(
                     self.calculated_injections,
-                    { output = stdout, start_line = injection.start_line, end_line = injection.end_line }
+                    { output = out, start_line = injection.start_line, end_line = injection.end_line }
                 )
                 if #self.calculated_injections == #self.injections then
                     self:set_current_output()
@@ -235,20 +243,40 @@ local function contains(t, ft)
     return false
 end
 
----@param conf FiletypeConfig
 ---@param ft string
----@return boolean
-local function should_format(conf, ft)
-    if conf.disable_as_injected and contains(conf.disable_as_injected, vim.bo.ft) then
-        return false
+---@return table<FiletypeConfig> | nil
+local function get_injected_confs(ft)
+    local injected_confs = {}
+    local confs = config.get_ft_configs(ft)
+    if vim.bo.ft == ft or not confs then
+        return nil
+    end
+    for _, c in ipairs(confs) do
+        if not c.disable_as_injected or not contains(c.disable_as_injected, vim.bo.ft) then
+            injected_confs[#injected_confs + 1] = c
+        end
     end
 
-    local buf_ft_conf = config.get_ft_config(vim.bo.ft)
-    if buf_ft_conf and buf_ft_conf.disable_injected and contains(buf_ft_conf.disable_injected, ft) then
-        return false
+    local buf_ft_confs = config.get_ft_configs(vim.bo.ft)
+    if not buf_ft_confs then
+        return injected_confs
     end
-
-    return true
+    for _, c in ipairs(buf_ft_confs) do
+        if not c.disable_injected or not contains(c.disable_injected, ft) then
+            if
+                not vim.tbl_contains(buf_ft_confs, function(v)
+                    return v.exe == c.exe
+                end, { predicate = true })
+            then
+                injected_confs[#injected_confs + 1] = c
+            end
+        else
+            injected_confs = vim.tbl_filter(function(v)
+                return v.exe == c.exe
+            end, injected_confs)
+        end
+    end
+    return injected_confs
 end
 
 ---@param text string
@@ -270,7 +298,7 @@ end
 local function lang_to_ft(lang)
     local fts = vim.treesitter.language.get_filetypes(lang)
     for _, ft in ipairs(fts) do
-        if config.get_ft_config(ft) then
+        if config.get_ft_configs(ft) then
             return ft
         end
     end
@@ -296,8 +324,8 @@ function Format:find_injections(input)
             local range = { root:range() }
             local start_line, end_line = range[1], range[3]
             local ft = lang_to_ft(lang)
-            local conf = config.get_ft_config(ft)
-            if conf and ft ~= vim.bo.ft and should_format(conf, ft) then
+            local confs = get_injected_confs(ft)
+            if confs and #confs > 0 then
                 local text = vim.treesitter.get_node_text(root, buf)
                 if text then
                     start_line = start_line + get_starting_newlines(text)
@@ -305,7 +333,7 @@ function Format:find_injections(input)
                     if end_line > start_line then
                         table.insert(
                             injections,
-                            { start_line = start_line + 1, end_line = end_line, conf = conf, input = text }
+                            { start_line = start_line + 1, end_line = end_line, confs = confs, input = text }
                         )
                     end
                 end
