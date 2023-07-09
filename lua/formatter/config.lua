@@ -2,7 +2,6 @@ local M = {}
 
 ---@class Config
 ---@field filetype table<string, string | table<string> | fun(): FiletypeConfig>
----@field format_async boolean
 ---@field format_on_save boolean | fun(): boolean
 ---@field lsp string[]
 
@@ -16,7 +15,6 @@ local M = {}
 
 ---@type Config
 local config = {
-    format_async = true,
     format_on_save = false,
     lsp = {},
 }
@@ -28,7 +26,7 @@ function M.set(opts)
     return config
 end
 
----@alias config_key "filetype" | "format_async"
+---@alias config_key "filetype"
 ---@param key config_key
 ---@return Config | table<string, fun(): FiletypeConfig> | boolean
 function M.get(key)
