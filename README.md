@@ -90,14 +90,7 @@ require('formatter').setup({
 By default `nvim-formatter` will format the buffer async and not block the editor.
 When the result from the formatter comes back, it only inserts the changes if
 there hasn't been any changes in the buffer while it was running the formatter.
-
-If you however wish to run it synchronously, you can turn it off with:
-
-```lua
-require('formatter').setup({
-    format_async = false,
-})
-```
+To format synchronously, use `FormatSync`
 
 ### Format on save
 
@@ -149,13 +142,43 @@ require('formatter').setup({
 
 - `Format`: Formats everything in the buffer including injections
 - `FormatWrite`: Same as `Format` but sets an autocmd on `ExitPre` to format
-  before `:wq`. Meant to be used with format on save when `format_async = true`
+  before `:wq`.
+- `FormatSync`: Use to format synchronously
 
 In addition to this, both commands is able to take an argument of either `basic`
 or `injections`.
 
 - `basic` will only format the buffer _excluding_ treesitter injections.
 - `injections` will _only_ format the injections in the buffer
+
+These are optional, and the default behaviour without these
+will format both with and without treesitter.
+
+It is also possible to specify a list of files or a glob-pattern to the command,
+and `nvim-formatter` will then format all files matching with the formatter
+setup.
+
+### Format from terminal!
+
+`nvim-formatter` also supports formatting via the command line. It is possibly
+by running the format command via script mode like:
+`nvim -u ~/.config/nvim/init.lua -Es +":FormatSync <args>"`
+
+Here you can pass all the same arguments as inside neovim, and `nvim-formatter`
+will format all the matching files from the arguments. A pro-tip is to create a
+function like:
+
+```bash
+function format() {
+    nvim -u ~/.config/nvim/init.lua -Es +":FormatSync $*"
+}
+```
+
+Then you can just call `format **/*.lua` for example.
+
+Note that you have to use `FormatSync` as the command is ran in script-mode. If
+it runs asynchronously, it could exit the script before it is finished
+formatting
 
 ## Acknowledgement
 
