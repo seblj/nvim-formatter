@@ -20,7 +20,6 @@ local config = {
     format_on_save = false,
     lsp = {},
 }
-local buffer_config = {}
 
 ---@param opts Config
 ---@return Config
@@ -49,44 +48,31 @@ local function string_config(conf)
     }
 end
 
----@param conf table<string> | FiletypeConfig
----@return FiletypeConfig
-local function table_config(conf)
-    -- Assume the table is already structured
-    if conf.exe then
-        return conf
+local function parse_configs(f)
+    if type(f) == 'function' then
+        return parse_configs(f())
+    elseif type(f) == 'string' then
+        return string_config(f)
     else
-        return {
-            exe = conf[1],
-            args = { unpack(conf, 2) },
-        }
+        return f
     end
 end
 
 ---@param ft string
----@return FiletypeConfig | nil
-function M.get_ft_config(ft)
+---@return table<FiletypeConfig> | nil
+function M.get_ft_configs(ft)
     local f = M.get('filetype')[ft]
     if not f then
         return nil
     end
-    if type(f) == 'function' then
-        local bufnr = vim.api.nvim_get_current_buf()
-        -- Cache per ft in the buffer
-        if buffer_config[bufnr] and buffer_config[bufnr][ft] then
-            return buffer_config[bufnr][ft]
+    if type(f) == 'table' then
+        local confs = {}
+        for _, c in pairs(f) do
+            confs[#confs + 1] = parse_configs(c)
         end
-        local conf = f()
-        if not buffer_config[bufnr] then
-            buffer_config[bufnr] = {}
-        end
-        buffer_config[bufnr][ft] = conf
-        return conf
-    elseif type(f) == 'table' then
-        return table_config(f)
-    else
-        return string_config(f)
+        return confs
     end
+    return { parse_configs(f) }
 end
 
 return M
