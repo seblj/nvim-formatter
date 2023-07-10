@@ -146,7 +146,7 @@ function M.setup(opts)
 
     create_command('Format', false, true)
     create_command('FormatWrite', true, true)
-    create_command('FormatSync', true, false)
+    create_command('FormatSync', false, false)
 end
 
 return M

@@ -30,4 +30,25 @@ function util.restore_marks(bufnr, marks)
     end
 end
 
+function util.tbl_contains(t, value, opts)
+    vim.validate({ t = { t, 't' }, opts = { opts, 't', true } })
+
+    local pred
+    if opts and opts.predicate then
+        vim.validate({ value = { value, 'c' } })
+        pred = value
+    else
+        pred = function(v)
+            return v == value
+        end
+    end
+
+    for _, v in pairs(t) do
+        if pred(v) then
+            return true
+        end
+    end
+    return false
+end
+
 return util
