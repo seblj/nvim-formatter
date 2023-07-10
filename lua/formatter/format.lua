@@ -218,7 +218,7 @@ function Format:set_current_output()
 end
 
 function Format:run_injections()
-    self.injections = self:find_injections(self.current_output)
+    self.injections = self:find_injections()
     if #self.injections > 0 then
         for _, injection in ipairs(self.injections) do
             self:run(1, injection.confs, injection.input, function(out)
@@ -254,28 +254,26 @@ local function contains(t, ft)
 end
 
 ---@param ft string
----@param bufnr number
 ---@return table<FiletypeConfig> | nil
-local function get_injected_confs(ft, bufnr)
+function Format:get_injected_confs(ft)
     local injected_confs = {}
     local confs = config.get_ft_configs(ft)
-    if vim.bo[bufnr].ft == ft or not confs then
+    if vim.bo[self.bufnr].ft == ft or not confs then
         return nil
     end
     for _, c in ipairs(confs) do
-        if not c.disable_as_injected or not contains(c.disable_as_injected, vim.bo[bufnr].ft) then
+        if not c.disable_as_injected or not contains(c.disable_as_injected, vim.bo[self.bufnr].ft) then
             injected_confs[#injected_confs + 1] = c
         end
     end
 
-    local buf_ft_confs = config.get_ft_configs(vim.bo[bufnr].ft)
-    if not buf_ft_confs then
+    if not self.confs then
         return injected_confs
     end
-    for _, c in ipairs(buf_ft_confs) do
+    for _, c in ipairs(self.confs) do
         if not c.disable_injected or not contains(c.disable_injected, ft) then
             if
-                not vim.tbl_contains(buf_ft_confs, function(v)
+                not util.tbl_contains(self.confs, function(v)
                     return v.exe == c.exe
                 end, { predicate = true })
             then
@@ -316,12 +314,11 @@ local function lang_to_ft(lang, bufnr)
     return vim.bo[bufnr].ft
 end
 
----@param input table
 ---@return Injection[]
-function Format:find_injections(input)
+function Format:find_injections()
     local injections = {}
     local buf = vim.api.nvim_create_buf(false, true)
-    vim.api.nvim_buf_set_lines(buf, 0, -1, false, input)
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, self.current_output)
 
     local parser_lang = vim.treesitter.language.get_lang(vim.bo[self.bufnr].ft)
     local ok, parser = pcall(vim.treesitter.get_parser, buf, parser_lang)
@@ -335,7 +332,7 @@ function Format:find_injections(input)
             local range = { root:range() }
             local start_line, end_line = range[1], range[3]
             local ft = lang_to_ft(lang, self.bufnr)
-            local confs = get_injected_confs(ft, self.bufnr)
+            local confs = self:get_injected_confs(ft)
             if confs and #confs > 0 then
                 local text = vim.treesitter.get_node_text(root, buf)
                 if text then
