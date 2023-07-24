@@ -2,8 +2,8 @@ local M = {}
 
 ---@class Config
 ---@field filetype table<string, string | table<string> | fun(): FiletypeConfig>
----@field format_on_save boolean | fun(): boolean
----@field lsp string[]
+---@field format_on_save? boolean | fun(): boolean
+---@field lsp? string[]
 
 ---@class FiletypeConfig
 ---@field exe string
@@ -15,6 +15,7 @@ local M = {}
 
 ---@type Config
 local config = {
+    filetype = {},
     format_on_save = false,
     lsp = {},
 }
