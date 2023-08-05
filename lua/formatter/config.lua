@@ -4,6 +4,10 @@ local M = {}
 ---@field filetype table<string, string | table<string> | fun(): FiletypeConfig>
 ---@field format_on_save? boolean | fun(): boolean
 ---@field lsp? string[]
+---@field treesitter? TreesitterConfig
+
+---@class TreesitterConfig
+---@field auto_indent table<string, boolean | fun(): boolean>
 
 ---@class FiletypeConfig
 ---@field exe string
@@ -18,6 +22,7 @@ local config = {
     filetype = {},
     format_on_save = false,
     lsp = {},
+    treesitter = { auto_indent = {} },
 }
 
 ---@param opts Config
@@ -28,7 +33,7 @@ function M.set(opts)
 end
 
 ---@alias config_key "filetype"
----@param key config_key
+---@param key? config_key
 ---@return Config | table<string, fun(): FiletypeConfig> | boolean
 function M.get(key)
     if key and config[key] ~= nil then

@@ -85,6 +85,30 @@ require('formatter').setup({
 })
 ```
 
+### Treesitter:
+
+By default, `nvim-formatter` will format the injected regions all the way to the
+left, and does not respect the current indent of the injection. This can be
+overridden with
+
+```lua
+require('formatter').setup({
+    treesitter = {
+        auto_indent = {
+            lua = true,
+            graphql = function()
+                return vim.bo.ft ~= 'markdown'
+            end,
+        },
+    },
+})
+```
+
+`treesitter.auto_indent` takes a table of filetypes, where the value can be
+either a boolean or a function returning a boolean on whether to accept the
+current indent or not. If it returns true, then it will format the entire
+injected area with the indent of the first line of the injection.
+
 ### Notes:
 
 By default `nvim-formatter` will format the buffer async and not block the editor.
