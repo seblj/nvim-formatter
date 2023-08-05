@@ -8,6 +8,7 @@ local util = require('formatter.util')
 ---@class Injection
 ---@field start_line number
 ---@field end_line number
+---@field ft string
 ---@field confs FiletypeConfig[]
 ---@field input string[]|string
 
@@ -217,11 +218,34 @@ function Format:set_current_output()
     end
 end
 
+---@param text string[]
+---@param ft string
+---@param start_line number
+local function try_transform_text(text, ft, start_line)
+    local conf = config.get().treesitter.auto_indent[ft]
+    if not conf then
+        return text
+    end
+
+    if type(conf) == 'function' then
+        conf = conf()
+        if not conf then
+            return text
+        end
+    end
+
+    local col = vim.fn.match(vim.fn.getline(start_line), '\\S') --[[@as number]]
+    return vim.tbl_map(function(val)
+        return string.format('%s%s', string.rep(' ', col), val)
+    end, text)
+end
+
 function Format:run_injections()
     self.injections = self:find_injections()
     if #self.injections > 0 then
         for _, injection in ipairs(self.injections) do
             self:run(1, injection.confs, injection.input, function(out)
+                out = try_transform_text(out, injection.ft, injection.start_line)
                 table.insert(
                     self.calculated_injections,
                     { output = out, start_line = injection.start_line, end_line = injection.end_line }
@@ -339,10 +363,13 @@ function Format:find_injections()
                     start_line = start_line + get_starting_newlines(text)
                     -- Only continue if end_line is higher than start_line
                     if end_line > start_line then
-                        table.insert(
-                            injections,
-                            { start_line = start_line + 1, end_line = end_line, confs = confs, input = text }
-                        )
+                        table.insert(injections, {
+                            start_line = start_line + 1,
+                            end_line = end_line,
+                            confs = confs,
+                            input = text,
+                            ft = ft,
+                        })
                     end
                 end
             end
