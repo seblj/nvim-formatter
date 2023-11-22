@@ -349,6 +349,7 @@ function Format:find_injections()
     if not ok or not parser then
         return injections
     end
+    parser:parse(true)
 
     for lang, child in pairs(parser:children()) do
         for _, tree in ipairs(child:trees()) do
