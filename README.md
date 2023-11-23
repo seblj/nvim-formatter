@@ -25,14 +25,12 @@ more advanced arguments.
 However, if you want even more control, you can also create a function that
 returns either a string or a table with the following keys.
 
-| Key                   | Type               | Meaning                                                                                                       |
-| --------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------- |
-| `exe`                 | string             | Executable to run                                                                                             |
-| `cond`                | function?          | Returns a boolean whether to format or not                                                                    |
-| `args`                | table?             | Table of args to pass                                                                                         |
-| `cwd`                 | string?            | The path to run the program from                                                                              |
-| `disable_as_injected` | (string or table)? | Avoids formatting as an injected language with treesitter.<br/> Table of filetypes or a `*` for all filetypes |
-| `disable_injected`    | (string or table)? | Avoids formatting injected languages with treesitter.<br/> Table of filetypes or a `*` for all filetypes      |
+| Key    | Type      | Meaning                                    |
+| ------ | --------- | ------------------------------------------ |
+| `exe`  | string    | Executable to run                          |
+| `cond` | function? | Returns a boolean whether to format or not |
+| `args` | table?    | Table of args to pass                      |
+| `cwd`  | string?   | The path to run the program from           |
 
 ### Examples:
 
@@ -100,6 +98,9 @@ require('formatter').setup({
                 return vim.bo.ft ~= 'markdown'
             end,
         },
+        disable_injected = {
+            markdown = { 'rust' },
+        },
     },
 })
 ```
@@ -108,6 +109,10 @@ require('formatter').setup({
 either a boolean or a function returning a boolean on whether to accept the
 current indent or not. If it returns true, then it will format the entire
 injected area with the indent of the first line of the injection.
+
+`treesitter.disable_injected` takes a table of filetypes, where the value should
+be a table of filetypes that it should not format as an injected language. The
+example will for example not format Rust regions in a markdown file.
 
 ### Notes:
 

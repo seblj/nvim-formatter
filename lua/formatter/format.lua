@@ -261,16 +261,22 @@ function Format:run_injections()
     end
 end
 
----@param t table | string
+---@param t table?
 ---@param ft string
 ---@return boolean
 local function contains(t, ft)
-    if type(t) == 'string' then
-        if t == '*' or t == ft then
-            return true
-        end
-    elseif type(t) == 'table' then
-        if vim.tbl_contains(t, ft) or vim.tbl_contains(t, '*') then
+    if not t then
+        return false
+    end
+    return vim.tbl_contains(t, ft) or vim.tbl_contains(t, '*')
+end
+
+---@param conf? table<FiletypeConfig>
+---@param exe string
+---@return boolean
+local function same_executable(conf, exe)
+    for _, c in ipairs(conf or {}) do
+        if c.exe == exe then
             return true
         end
     end
@@ -280,35 +286,24 @@ end
 ---@param ft string
 ---@return table<FiletypeConfig> | nil
 function Format:get_injected_confs(ft)
-    local injected_confs = {}
     local confs = config.get_ft_configs(ft)
     if vim.bo[self.bufnr].ft == ft or not confs then
         return nil
     end
+
+    local disable_injected = config.get().treesitter.disable_injected[vim.bo[self.bufnr].ft]
+
+    -- Only try to format an injected language if it is not disabled with
+    -- `disable_injected` or if the executable is different. Check the
+    -- executable because we should not format with prettier typescript inside
+    -- vue-files. Prettier for vue should do the entire file
+    local injected_confs = {}
     for _, c in ipairs(confs) do
-        if not c.disable_as_injected or not contains(c.disable_as_injected, vim.bo[self.bufnr].ft) then
+        if not contains(disable_injected, ft) and not same_executable(self.confs, c.exe) then
             injected_confs[#injected_confs + 1] = c
         end
     end
 
-    if not self.confs then
-        return injected_confs
-    end
-    for _, c in ipairs(self.confs) do
-        if not c.disable_injected or not contains(c.disable_injected, ft) then
-            if
-                not util.tbl_contains(self.confs, function(v)
-                    return v.exe == c.exe
-                end, { predicate = true })
-            then
-                injected_confs[#injected_confs + 1] = c
-            end
-        else
-            injected_confs = vim.tbl_filter(function(v)
-                return v.exe == c.exe
-            end, injected_confs)
-        end
-    end
     return injected_confs
 end
 
@@ -327,15 +322,15 @@ local function get_starting_newlines(text)
 end
 
 ---@param lang string
----@return string
-local function lang_to_ft(lang, bufnr)
+---@return string?
+local function lang_to_ft(lang)
     local fts = vim.treesitter.language.get_filetypes(lang)
     for _, ft in ipairs(fts) do
         if config.get_ft_configs(ft) then
             return ft
         end
     end
-    return vim.bo[bufnr].ft
+    return nil
 end
 
 ---@return Injection[]
@@ -356,7 +351,7 @@ function Format:find_injections()
             local root = tree:root()
             local range = { root:range() }
             local start_line, end_line = range[1], range[3]
-            local ft = lang_to_ft(lang, self.bufnr)
+            local ft = lang_to_ft(lang) or vim.bo[self.bufnr].ft
             local confs = self:get_injected_confs(ft)
             if confs and #confs > 0 then
                 local text = vim.treesitter.get_node_text(root, buf)

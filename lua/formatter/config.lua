@@ -7,7 +7,8 @@ local M = {}
 ---@field treesitter? TreesitterConfig
 
 ---@class TreesitterConfig
----@field auto_indent table<string, boolean | fun(): boolean>
+---@field auto_indent? table<string, boolean | fun(): boolean>
+---@field disable_injected? table<string, table<string>?>
 
 ---@class FiletypeConfig
 ---@field exe string
@@ -22,13 +23,13 @@ local config = {
     filetype = {},
     format_on_save = false,
     lsp = {},
-    treesitter = { auto_indent = {} },
+    treesitter = { auto_indent = {}, disable_injected = {} },
 }
 
 ---@param opts Config
 ---@return Config
 function M.set(opts)
-    config = vim.tbl_extend('force', config, opts or {})
+    config = vim.tbl_deep_extend('force', config, opts or {})
     return config
 end
 
