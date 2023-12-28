@@ -89,7 +89,7 @@ function Format:start(type, exit_pre)
         self:run_injections()
     elseif type == 'basic' then
         if not self.confs then
-            return vim.notify(
+            return vim.notify_once(
                 string.format('No config found for %s', vim.bo[self.bufnr].ft),
                 vim.log.levels.INFO,
                 util.notify_opts
@@ -132,7 +132,11 @@ end
 function Format:execute(conf, input, on_success)
     if vim.fn.executable(conf.exe) ~= 1 then
         self.is_formatting = false
-        return vim.notify(string.format('%s: executable not found', conf.exe), vim.log.levels.ERROR, util.notify_opts)
+        return vim.notify_once(
+            string.format('%s: executable not found', conf.exe),
+            vim.log.levels.ERROR,
+            util.notify_opts
+        )
     end
 
     if conf.cond and not conf.cond() then
