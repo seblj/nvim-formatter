@@ -1,9 +1,10 @@
--- Use implementation from this PR
--- https://github.com/neovim/neovim/pull/23827
--- Remove once it's in an official release
-local system = vim.system or require('formatter.system').run
 local config = require('formatter.config')
-local util = require('formatter.util')
+local text_edit = require('formatter.text_edit')
+local notify_opts = { title = 'Formatter' }
+
+---@class FormatRange
+---@field start number
+---@field end number
 
 ---@class Injection
 ---@field start_line number
@@ -18,8 +19,7 @@ local util = require('formatter.util')
 ---@field end_line number
 
 ---@class Format
----@field start_line number
----@field end_line number
+---@field range FormatRange
 ---@field async boolean
 ---@field inital_changedtick number
 ---@field bufnr number
@@ -38,13 +38,15 @@ function Format:new(range, async, bufnr)
     local o = {}
     setmetatable(o, { __index = self })
 
-    o.start_line = range and range[1] or 1
-    o.end_line = range and range[2] or -1
     o.bufnr = bufnr or vim.api.nvim_get_current_buf()
     o.inital_changedtick = vim.api.nvim_buf_get_changedtick(o.bufnr)
     o.async = async
+    local start_line = range and range[1] or 1
+    local end_line = range and range[2] or -1
 
-    local input = vim.api.nvim_buf_get_lines(o.bufnr, o.start_line - 1, o.end_line, false)
+    local input = vim.api.nvim_buf_get_lines(o.bufnr, start_line - 1, end_line, false)
+
+    o.range = { start = start_line, ['end'] = end_line == -1 and #input or end_line }
 
     o.is_formatting = false
     o.calculated_injections = {}
@@ -61,7 +63,7 @@ end
 ---@param exit_pre? boolean Whether to set ExitPre autocmd or not
 function Format:start(type, exit_pre)
     if not vim.bo[self.bufnr].modifiable then
-        return vim.notify('Buffer is not modifiable', vim.log.levels.INFO, util.notify_opts)
+        return vim.notify('Buffer is not modifiable', vim.log.levels.INFO, notify_opts)
     end
 
     self.is_formatting = true
@@ -92,7 +94,7 @@ function Format:start(type, exit_pre)
             return vim.notify_once(
                 string.format('No config found for %s', vim.bo[self.bufnr].ft),
                 vim.log.levels.INFO,
-                util.notify_opts
+                notify_opts
             )
         end
         self:run_basic(false)
@@ -105,20 +107,12 @@ function Format:insert()
         vim.schedule(function()
             if self.async and self.inital_changedtick ~= vim.api.nvim_buf_get_changedtick(self.bufnr) then
                 self.is_formatting = false
-                return vim.notify(
-                    string.format('Buffer changed while formatting'),
-                    vim.log.levels.INFO,
-                    util.notify_opts
-                )
+                return vim.notify('Buffer changed while formatting', vim.log.levels.INFO, notify_opts)
             end
-            local view = vim.fn.winsaveview()
-            local marks = util.save_marks(self.bufnr)
-            vim.api.nvim_buf_set_lines(self.bufnr, self.start_line - 1, self.end_line, false, self.current_output)
+            text_edit.apply_text_edits(self.bufnr, self.input, self.current_output)
             vim.api.nvim_buf_call(self.bufnr, function()
-                vim.cmd.write({ mods = { emsg_silent = true, silent = true, noautocmd = true } })
+                vim.cmd.update({ mods = { emsg_silent = true, silent = true, noautocmd = true } })
             end)
-            vim.fn.winrestview(view)
-            util.restore_marks(self.bufnr, marks)
             self.is_formatting = false
         end)
     else
@@ -132,11 +126,7 @@ end
 function Format:execute(conf, input, on_success)
     if vim.fn.executable(conf.exe) ~= 1 then
         self.is_formatting = false
-        return vim.notify_once(
-            string.format('%s: executable not found', conf.exe),
-            vim.log.levels.ERROR,
-            util.notify_opts
-        )
+        return vim.notify_once(string.format('%s: executable not found', conf.exe), vim.log.levels.ERROR, notify_opts)
     end
 
     if conf.cond and not conf.cond() then
@@ -157,7 +147,7 @@ function Format:execute(conf, input, on_success)
                         errmsg and ': ' .. errmsg or ''
                     ),
                     vim.log.levels.ERROR,
-                    util.notify_opts
+                    notify_opts
                 )
             end)
         else
@@ -170,7 +160,7 @@ function Format:execute(conf, input, on_success)
         end
     end
 
-    local out = system({ conf.exe, unpack(conf.args) }, {
+    local out = vim.system({ conf.exe, unpack(conf.args) }, {
         cwd = conf.cwd or vim.fs.dirname(vim.api.nvim_buf_get_name(self.bufnr)),
         -- `get_node_text` returns string[] | string
         stdin = type(input) == 'table' and table.concat(input, '\n') or input,
