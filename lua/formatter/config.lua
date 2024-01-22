@@ -71,11 +71,9 @@ function M.get_ft_configs(ft)
         return nil
     end
     if type(f) == 'table' then
-        local confs = {}
-        for _, c in pairs(f) do
-            confs[#confs + 1] = parse_configs(c)
-        end
-        return confs
+        return vim.iter.map(function(c)
+            return parse_configs(c)
+        end, f)
     end
     return { parse_configs(f) }
 end
