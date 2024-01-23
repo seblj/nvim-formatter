@@ -21,7 +21,6 @@ local notify_opts = { title = 'Formatter' }
 
 ---@class Format
 ---@field range FormatRange | nil
----@field async boolean
 ---@field inital_changedtick number
 ---@field bufnr number
 ---@field confs FiletypeConfig | nil
@@ -30,15 +29,13 @@ local notify_opts = { title = 'Formatter' }
 local Format = {}
 
 ---@param range number[] | false
----@param async boolean
 ---@param bufnr? number
-function Format:new(range, async, bufnr)
+function Format:new(range, bufnr)
     local o = {}
     setmetatable(o, { __index = self })
 
     o.bufnr = bufnr or vim.api.nvim_get_current_buf()
     o.inital_changedtick = vim.api.nvim_buf_get_changedtick(o.bufnr)
-    o.async = async
     local start_line = range and range[1] or 1
     local end_line = range and range[2] or -1
 
@@ -56,7 +53,7 @@ end
 
 local asystem = a.wrap(vim.system, 3)
 
-local execute = function(bufnr, conf, input, async)
+local execute = function(bufnr, conf, input)
     if vim.fn.executable(conf.exe) ~= 1 then
         vim.notify_once(string.format('%s: executable not found', conf.exe), vim.log.levels.ERROR, notify_opts)
         return nil
@@ -66,16 +63,11 @@ local execute = function(bufnr, conf, input, async)
         return nil
     end
 
-    local system = async and asystem or vim.system
-    local out = system({ conf.exe, unpack(conf.args) }, {
+    local out = asystem({ conf.exe, unpack(conf.args) }, {
         cwd = conf.cwd or vim.fs.dirname(vim.api.nvim_buf_get_name(bufnr)),
         -- `get_node_text` returns string[] | string
         stdin = type(input) == 'table' and table.concat(input, '\n') or input,
     })
-
-    if not async then
-        out = out:wait()
-    end
 
     if out.code ~= 0 then
         local errmsg = out.stderr and out.stderr or out.stdout
@@ -135,11 +127,11 @@ function Format:run_injections(input)
     local injections = self:find_injections(input)
 
     local jobs = vim.iter.map(function(injection)
-        return a.wrap(function(cb)
+        return a.void(function(cb)
             local output = self:run(injection.confs, injection.input)
             output = try_transform_text(output, injection.ft, injection.start_line)
             cb({ output = output, start_line = injection.start_line, end_line = injection.end_line })
-        end, 1)
+        end)
     end, injections)
 
     local res = a.join(jobs, 10)
@@ -158,6 +150,7 @@ local function run(format, type)
         format:insert(output)
     else
         local output = format:run(format.confs, format.input)
+        a.scheduler()
         local ok, res = pcall(function()
             return format:run_injections(output)
         end)
@@ -180,23 +173,20 @@ local start = a.void(function(format, type)
 end)
 
 ---@param type "all" | "basic" | "injections"
----@param exit_pre? boolean Whether to set ExitPre autocmd or not
-function Format:start(type, exit_pre)
+function Format:start(type)
     if not vim.bo[self.bufnr].modifiable then
         return vim.notify('Buffer is not modifiable', vim.log.levels.INFO, notify_opts)
     end
 
-    if exit_pre and self.async then
-        vim.api.nvim_create_autocmd('ExitPre', {
-            pattern = '*',
-            group = vim.api.nvim_create_augroup('FormatterAsync', { clear = true }),
-            callback = function()
-                vim.wait(5000, function()
-                    return self.is_formatting == false
-                end, 10)
-            end,
-        })
-    end
+    vim.api.nvim_create_autocmd({ 'ExitPre', 'VimLeavePre' }, {
+        pattern = '*',
+        group = vim.api.nvim_create_augroup('FormatterAsync', { clear = true }),
+        callback = function()
+            vim.wait(5000, function()
+                return self.is_formatting == false
+            end, 10)
+        end,
+    })
 
     self.is_formatting = true
     start(self, type)
@@ -206,7 +196,7 @@ end
 function Format:insert(output)
     if output and not vim.deep_equal(output, self.input) then
         vim.schedule(function()
-            if self.async and self.inital_changedtick ~= vim.api.nvim_buf_get_changedtick(self.bufnr) then
+            if self.inital_changedtick ~= vim.api.nvim_buf_get_changedtick(self.bufnr) then
                 vim.notify('Buffer changed while formatting', vim.log.levels.INFO, notify_opts)
                 return
             end

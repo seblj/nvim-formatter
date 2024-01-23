@@ -1,6 +1,6 @@
 # nvim-formatter
 
-Formatter with treesitter integration
+Asynchronous formatter with treesitter integration
 
 ## Requirements
 
@@ -114,13 +114,6 @@ injected area with the indent of the first line of the injection.
 be a table of filetypes that it should not format as an injected language. The
 example will for example not format Rust regions in a markdown file.
 
-### Notes:
-
-By default `nvim-formatter` will format the buffer async and not block the editor.
-When the result from the formatter comes back, it only inserts the changes if
-there hasn't been any changes in the buffer while it was running the formatter.
-To format synchronously, use `FormatSync`
-
 ### Format on save
 
 To enable format on save, you can set an option `format_on_save` to true or a
@@ -170,18 +163,18 @@ require('formatter').setup({
 ### Exposed commands
 
 - `Format`: Formats everything in the buffer including injections
-- `FormatWrite`: Same as `Format` but sets an autocmd on `ExitPre` to format
-  before `:wq`.
-- `FormatSync`: Use to format synchronously
 
-In addition to this, both commands is able to take an argument of either `basic`
+In addition to this, the command is able to take an argument of either `basic`
 or `injections`.
 
 - `basic` will only format the buffer _excluding_ treesitter injections.
 - `injections` will _only_ format the injections in the buffer
 
 These are optional, and the default behaviour without these
-will format both with and without treesitter.
+will format both with and without treesitter. First it will try to format
+normally, and then it will try to format the injections. Everything will be
+applied at once to maintain a single undo history. Currently, it will format
+normally if injections fail.
 
 It is also possible to specify a list of files or a glob-pattern to the command,
 and `nvim-formatter` will then format all files matching with the formatter
@@ -191,7 +184,7 @@ setup.
 
 `nvim-formatter` also supports formatting via the command line. It is possibly
 by running the format command via script mode like:
-`nvim -u ~/.config/nvim/init.lua -Es +":FormatSync <args>"`
+`nvim -u ~/.config/nvim/init.lua -Es +":Format <args>"`
 
 Here you can pass all the same arguments as inside neovim, and `nvim-formatter`
 will format all the matching files from the arguments. A pro-tip is to create a
@@ -199,15 +192,11 @@ function like:
 
 ```bash
 function format() {
-    nvim -u ~/.config/nvim/init.lua -Es +":FormatSync $*"
+    nvim -u ~/.config/nvim/init.lua -Es +":Format $*"
 }
 ```
 
 Then you can just call `format **/*.lua` for example.
-
-Note that you have to use `FormatSync` as the command is ran in script-mode. If
-it runs asynchronously, it could exit the script before it is finished
-formatting
 
 ## Acknowledgement
 
