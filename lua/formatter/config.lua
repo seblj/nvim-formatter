@@ -45,37 +45,41 @@ end
 
 ---@param conf string
 ---@return FiletypeConfig
-local function string_config(conf)
+local function string_config(bufnr, conf)
     local split = vim.split(conf, ' ')
     return {
         exe = split[1],
         args = { unpack(split, 2, #split) },
+        cwd = vim.fs.dirname(vim.api.nvim_buf_get_name(bufnr)),
     }
 end
 
-local function parse_configs(f)
+---@param bufnr number
+---@param f function
+local function parse_configs(bufnr, f)
     if type(f) == 'function' then
-        return parse_configs(f())
+        return parse_configs(bufnr, f())
     elseif type(f) == 'string' then
-        return string_config(f)
+        return string_config(bufnr, f)
     else
+        f.cwd = f.cwd or vim.fs.dirname(vim.api.nvim_buf_get_name(bufnr))
         return f
     end
 end
 
 ---@param ft string
 ---@return table<FiletypeConfig> | nil
-function M.get_ft_configs(ft)
+function M.get_ft_configs(bufnr, ft)
     local f = M.get('filetype')[ft]
     if not f then
         return nil
     end
     if type(f) == 'table' then
         return vim.iter.map(function(c)
-            return parse_configs(c)
+            return parse_configs(bufnr, c)
         end, f)
     end
-    return { parse_configs(f) }
+    return { parse_configs(bufnr, f) }
 end
 
 return M

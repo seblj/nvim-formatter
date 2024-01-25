@@ -26,6 +26,11 @@ local function common_suffix_len(a, b)
     return min_len
 end
 
+---@param replacement string[]
+---@param start_line number
+---@param start_char number
+---@param end_line number
+---@param end_char number
 local function create_text_edit(replacement, start_line, start_char, end_line, end_char)
     return {
         newText = table.concat(replacement, '\n'),

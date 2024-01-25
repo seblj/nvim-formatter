@@ -45,7 +45,7 @@ function Format:new(range, bufnr)
 
     o.is_formatting = false
 
-    o.confs = config.get_ft_configs(vim.bo[o.bufnr].ft)
+    o.confs = config.get_ft_configs(o.bufnr, vim.bo[o.bufnr].ft)
     o.input = input
 
     return o
@@ -64,12 +64,13 @@ local execute = function(bufnr, conf, input)
     end
 
     local out = asystem({ conf.exe, unpack(conf.args) }, {
-        cwd = conf.cwd or vim.fs.dirname(vim.api.nvim_buf_get_name(bufnr)),
+        cwd = conf.cwd,
         -- `get_node_text` returns string[] | string
         stdin = type(input) == 'table' and table.concat(input, '\n') or input,
     })
 
     if out.code ~= 0 then
+        a.scheduler()
         local errmsg = out.stderr and out.stderr or out.stdout
         vim.notify(
             string.format(
@@ -253,7 +254,7 @@ end
 ---@param ft string
 ---@return table<FiletypeConfig> | nil
 function Format:get_injected_confs(ft)
-    local confs = config.get_ft_configs(ft)
+    local confs = config.get_ft_configs(self.bufnr, ft)
     if vim.bo[self.bufnr].ft == ft or not confs then
         return nil
     end
@@ -280,12 +281,13 @@ local function get_starting_newlines(text)
     end) - 1
 end
 
+---@param bufnr number
 ---@param lang string
 ---@return string?
-local function lang_to_ft(lang)
+local function lang_to_ft(bufnr, lang)
     local filetypes = vim.treesitter.language.get_filetypes(lang)
     return vim.iter(filetypes):find(function(ft)
-        return config.get_ft_configs(ft)
+        return config.get_ft_configs(bufnr, ft)
     end)
 end
 
@@ -308,7 +310,7 @@ function Format:find_injections(output)
             local root = tree:root()
             local range = { root:range() }
             local start_line, end_line = range[1], range[3]
-            local ft = lang_to_ft(lang) or vim.bo[self.bufnr].ft
+            local ft = lang_to_ft(self.bufnr, lang) or vim.bo[self.bufnr].ft
             local confs = self:get_injected_confs(ft)
             if confs and #confs > 0 then
                 local text = vim.treesitter.get_node_text(root, buf)
