@@ -55,6 +55,7 @@ local asystem = a.wrap(vim.system, 3)
 
 local execute = function(bufnr, conf, input)
     if vim.fn.executable(conf.exe) ~= 1 then
+        a.scheduler()
         vim.notify_once(string.format('%s: executable not found', conf.exe), vim.log.levels.ERROR, notify_opts)
         return nil
     end
@@ -63,7 +64,7 @@ local execute = function(bufnr, conf, input)
         return nil
     end
 
-    local out = asystem({ conf.exe, unpack(conf.args) }, {
+    local out = asystem({ conf.exe, unpack(conf.args or {}) }, {
         cwd = conf.cwd,
         -- `get_node_text` returns string[] | string
         stdin = type(input) == 'table' and table.concat(input, '\n') or input,
