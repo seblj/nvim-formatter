@@ -1,7 +1,9 @@
 local M = {}
 
+---@alias FiletypeConfigUnion string | FiletypeConfig | fun(): string | FiletypeConfig
+
 ---@class Config
----@field filetype table<string, string | table<string> | fun(): FiletypeConfig>
+---@field filetype table<string, FiletypeConfigUnion | FiletypeConfigUnion[]>
 ---@field format_on_save? boolean | fun(): boolean
 ---@field lsp? string[]
 ---@field treesitter? TreesitterConfig
@@ -33,13 +35,8 @@ function M.set(opts)
     return config
 end
 
----@alias config_key "filetype"
----@param key? config_key
----@return Config | table<string, fun(): FiletypeConfig> | boolean
-function M.get(key)
-    if key and config[key] ~= nil then
-        return config[key]
-    end
+---@return Config
+function M.get()
     return config
 end
 
@@ -55,7 +52,8 @@ local function string_config(bufnr, conf)
 end
 
 ---@param bufnr number
----@param f function
+---@param f FiletypeConfig | string | fun(): FiletypeConfig
+---@return FiletypeConfig
 local function parse_configs(bufnr, f)
     if type(f) == 'function' then
         return parse_configs(bufnr, f())
@@ -70,11 +68,11 @@ end
 ---@param ft string
 ---@return table<FiletypeConfig> | nil
 function M.get_ft_configs(bufnr, ft)
-    local f = M.get('filetype')[ft]
+    local f = config.filetype[ft]
     if not f then
         return nil
     end
-    if type(f) == 'table' then
+    if type(f) == 'table' and f[1] ~= nil then
         return vim.iter.map(function(c)
             return parse_configs(bufnr, c)
         end, f)
