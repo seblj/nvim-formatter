@@ -78,7 +78,7 @@ function M.setup(opts)
                 and vim.iter.map(function(value)
                     return vim.fn.fnamemodify(value, ':p')
                 end, args)
-            or vim.iter.map(function(item)
+            or vim.iter.filter(function(item)
                 return item ~= ''
             end, vim.split(vim.fn.globpath(vim.fn.getcwd(), args[2] or args[1]), '\n'))
     end
@@ -93,23 +93,8 @@ function M.setup(opts)
             local type = vim.tbl_isempty(args) and 'all' or args[1]
             Format:new(range):start(type)
         else
-            -- TODO: Refactor this to use vim.iter():find?
-            local paths, type
-            -- If there are more than two arguments and no "basic",
-            -- or "injections", it means that a list of files is added as
-            -- arguments to format
-            if vim.tbl_contains(arguments, args[1]) then
-                type = table.remove(args, 1)
-                -- If there are more than two arguments, then assume it is a
-                -- list of files. Otherwise, treat it as glob
-                paths = parse_paths(args, 2)
-            else
-                -- Since the first argument is not "basic", or
-                -- "injections" we only check if number of arguments is
-                -- larger than one.
-                type = 'all'
-                paths = parse_paths(args, 1)
-            end
+            local type = vim.iter(arguments):find(args[1]) or 'all'
+            local paths = type == 'all' and parse_paths(args, 1) or parse_paths(args, 2)
 
             for _, path in ipairs(paths) do
                 vim.api.nvim_create_autocmd('BufAdd', {
