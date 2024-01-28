@@ -218,7 +218,7 @@ function Format:run(confs, input)
     local sliced_input = self.range and vim.iter(input):slice(self.range.start, self.range['end']):totable() or input
 
     local formatted_output = vim.iter(confs):fold(sliced_input, function(acc, v)
-        return execute(self.bufnr, v, acc) --[[ @as string[] ]]
+        return execute(self.bufnr, v, acc) or acc
     end)
 
     if self.range then
