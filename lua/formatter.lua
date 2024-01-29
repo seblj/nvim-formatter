@@ -71,18 +71,6 @@ function M.setup(opts)
         end, arguments)
     end
 
-    -- Parse args as path if #args is higher than treshold. Otherwise, use
-    -- globpath
-    local function parse_paths(args, treshold)
-        return #args > treshold
-                and vim.iter.map(function(value)
-                    return vim.fn.fnamemodify(value, ':p')
-                end, args)
-            or vim.iter.filter(function(item)
-                return item ~= ''
-            end, vim.split(vim.fn.globpath(vim.fn.getcwd(), args[2] or args[1]), '\n'))
-    end
-
     vim.api.nvim_create_user_command('Format', function(c_opts)
         local args = parse_cmdline(c_opts.args)
         local range = c_opts.range ~= 0 and { c_opts.line1, c_opts.line2 }
@@ -94,7 +82,7 @@ function M.setup(opts)
             Format:new(range):start(type)
         else
             local type = vim.iter(arguments):find(args[1]) or 'all'
-            local paths = type == 'all' and parse_paths(args, 1) or parse_paths(args, 2)
+            local paths = vim.fn.globpath(vim.loop.cwd(), args[2] or args[1], 0, 1)
 
             for _, path in ipairs(paths) do
                 vim.api.nvim_create_autocmd('BufAdd', {
@@ -107,7 +95,13 @@ function M.setup(opts)
                         Format:new(range, a.buf):start(type)
                     end,
                 })
-                vim.cmd.badd(path)
+
+                local bufnr = vim.fn.bufnr(path)
+                if bufnr == -1 then
+                    vim.cmd.badd(path)
+                else
+                    Format:new(range, bufnr):start(type)
+                end
             end
         end
     end, {
