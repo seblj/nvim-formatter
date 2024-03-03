@@ -3,7 +3,7 @@ local Format = require('formatter.format')
 
 local M = {}
 
----@param opts Config | nil
+---@param opts NvimFormatterConfig | nil
 function M.setup(opts)
     opts = opts or {}
     config.set(opts)

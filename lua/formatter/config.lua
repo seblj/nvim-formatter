@@ -1,26 +1,25 @@
 local M = {}
 
----@alias FiletypeConfigUnion string | FiletypeConfig | fun(): string | FiletypeConfig
+---@alias NvimFormatterFiletypeConfigUnion string | NvimFormatterFiletypeConfig | fun(): string | NvimFormatterFiletypeConfig
 
----@class Config
----@field filetype table<string, FiletypeConfigUnion | FiletypeConfigUnion[]>
+---@class NvimFormatterConfig
+---@field filetype table<string, NvimFormatterFiletypeConfigUnion | NvimFormatterFiletypeConfigUnion[]>
 ---@field format_on_save? boolean | fun(): boolean
 ---@field lsp? string[]
----@field treesitter? TreesitterConfig
+---@field treesitter? NvimFormatterTreesitterConfig
 
----@class TreesitterConfig
+---@class NvimFormatterTreesitterConfig
 ---@field auto_indent? table<string, boolean | fun(): boolean>
 ---@field disable_injected? table<string, table<string>?>
 
----@class FiletypeConfig
+---@class NvimFormatterFiletypeConfig
 ---@field exe string
 ---@field cond? function
 ---@field args? table
 ---@field cwd? string
 ---@field disable_injected? string | table
----@field disable_as_injected? string | table
 
----@type Config
+---@type NvimFormatterConfig
 local config = {
     filetype = {},
     format_on_save = false,
@@ -28,20 +27,20 @@ local config = {
     treesitter = { auto_indent = {}, disable_injected = {} },
 }
 
----@param opts Config
----@return Config
+---@param opts NvimFormatterConfig
+---@return NvimFormatterConfig
 function M.set(opts)
     config = vim.tbl_deep_extend('force', config, opts or {})
     return config
 end
 
----@return Config
+---@return NvimFormatterConfig
 function M.get()
     return config
 end
 
 ---@param conf string
----@return FiletypeConfig
+---@return NvimFormatterFiletypeConfig
 local function string_config(bufnr, conf)
     local split = vim.split(conf, ' ')
     return {
@@ -52,8 +51,8 @@ local function string_config(bufnr, conf)
 end
 
 ---@param bufnr number
----@param f FiletypeConfig | string | fun(): FiletypeConfig
----@return FiletypeConfig
+---@param f NvimFormatterFiletypeConfig | string | fun(): NvimFormatterFiletypeConfig
+---@return NvimFormatterFiletypeConfig
 local function parse_configs(bufnr, f)
     if type(f) == 'function' then
         return parse_configs(bufnr, f())
@@ -66,7 +65,7 @@ local function parse_configs(bufnr, f)
 end
 
 ---@param ft string
----@return table<FiletypeConfig> | nil
+---@return table<NvimFormatterFiletypeConfig> | nil
 function M.get_ft_configs(bufnr, ft)
     local f = config.filetype[ft]
     if not f then

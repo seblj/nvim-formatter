@@ -3,27 +3,22 @@ local text_edit = require('formatter.text_edit')
 local a = require('formatter.async')
 local notify_opts = { title = 'Formatter' }
 
----@class FormatRange
+---@class NvimFormatterFormatRange
 ---@field start number
 ---@field end number
 
----@class Injection
+---@class NvimFormatterInjection
 ---@field start_line number
 ---@field end_line number
 ---@field ft string
----@field confs FiletypeConfig[]
+---@field confs NvimFormatterFiletypeConfig[]
 ---@field input string[]|string
 
----@class FormattedInjection
----@field output table
----@field start_line number
----@field end_line number
-
----@class Format
----@field range FormatRange | nil
+---@class NvimFormatterFormat
+---@field range NvimFormatterFormatRange | nil
 ---@field inital_changedtick number
 ---@field bufnr number
----@field confs FiletypeConfig | nil
+---@field confs NvimFormatterFiletypeConfig | nil
 ---@field is_formatting boolean
 ---@field input table
 local Format = {}
@@ -141,7 +136,7 @@ function Format:run_injections(input)
     return get_injection_output(res, input)
 end
 
----@param format Format
+---@param format NvimFormatterFormat
 ---@param type "basic" | "injections" | "all"
 local function run(format, type)
     if type == 'basic' then
@@ -164,7 +159,7 @@ local function run(format, type)
     end
 end
 
----@param format Format
+---@param format NvimFormatterFormat
 ---@param type "basic" | "injections" | "all"
 local start = a.void(function(format, type)
     local ok, res = pcall(run, format, type)
@@ -211,7 +206,7 @@ function Format:insert(output)
 end
 
 ---Returns the output from formatting the buffer with all configs
----@param confs FiletypeConfig[]
+---@param confs NvimFormatterFiletypeConfig[]
 ---@param input string[]
 ---@return string[]
 function Format:run(confs, input)
@@ -243,7 +238,7 @@ local function contains(t, ft)
     end)
 end
 
----@param conf? table<FiletypeConfig>
+---@param conf? table<NvimFormatterFiletypeConfig>
 ---@param exe string
 ---@return boolean
 local function same_executable(conf, exe)
@@ -253,7 +248,7 @@ local function same_executable(conf, exe)
 end
 
 ---@param ft string
----@return table<FiletypeConfig> | nil
+---@return table<NvimFormatterFiletypeConfig> | nil
 function Format:get_injected_confs(ft)
     local confs = config.get_ft_configs(self.bufnr, ft)
     if vim.bo[self.bufnr].ft == ft or not confs then
@@ -293,7 +288,7 @@ local function lang_to_ft(bufnr, lang)
 end
 
 ---@param output string[]
----@return Injection[]
+---@return NvimFormatterInjection[]
 function Format:find_injections(output)
     local injections = {}
     local buf = vim.api.nvim_create_buf(false, true)
