@@ -52,7 +52,9 @@ end
 local function system_wrap(...)
     local out = vim.system(...)
     vim.defer_fn(function()
-        out:kill(9)
+        if not out:is_closing() then
+            out:kill(9)
+        end
     end, 5000)
 end
 
