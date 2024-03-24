@@ -12,7 +12,7 @@ local notify_opts = { title = 'Formatter' }
 ---@field end_line number
 ---@field ft string
 ---@field confs NvimFormatterFiletypeConfig[]
----@field input string[]|string
+---@field input string[]
 
 ---@class NvimFormatterFormat
 ---@field range NvimFormatterFormatRange | nil
@@ -46,7 +46,17 @@ function Format:new(range, bufnr)
     return o
 end
 
-local asystem = a.wrap(vim.system, 3)
+-- Crete a wrapper for `vim.system` that can be ran asynchronously with `async.wrap`.
+-- Have a timeout to kill the process after 5000ms. The `timeout` option tries to terminate
+-- the process with SIGTERM instead of killing it with SIGKILL.
+local function system_wrap(...)
+    local out = vim.system(...)
+    vim.defer_fn(function()
+        out:kill(9)
+    end, 5000)
+end
+
+local asystem = a.wrap(system_wrap, 3)
 
 local execute = function(bufnr, conf, input)
     if vim.fn.executable(conf.exe) ~= 1 then
@@ -61,8 +71,7 @@ local execute = function(bufnr, conf, input)
 
     local out = asystem({ conf.exe, unpack(conf.args or {}) }, {
         cwd = conf.cwd,
-        -- `get_node_text` returns string[] | string
-        stdin = type(input) == 'table' and table.concat(input, '\n') or input,
+        stdin = table.concat(input, '\n'),
     })
 
     if out.code ~= 0 then
@@ -75,6 +84,15 @@ local execute = function(bufnr, conf, input)
                 conf.exe,
                 errmsg and ': ' .. errmsg or ''
             ),
+            vim.log.levels.ERROR,
+            notify_opts
+        )
+        return nil
+    end
+    if out.signal == 9 then
+        a.scheduler()
+        vim.notify(
+            string.format('Timeout when formatting %s with %s', vim.api.nvim_buf_get_name(bufnr), conf.exe),
             vim.log.levels.ERROR,
             notify_opts
         )
@@ -318,7 +336,7 @@ function Format:find_injections(output)
                             start_line = start_line + 1,
                             end_line = end_line,
                             confs = confs,
-                            input = text,
+                            input = type(text) == 'string' and vim.split(text, '\n') or text,
                             ft = ft,
                         })
                     end
