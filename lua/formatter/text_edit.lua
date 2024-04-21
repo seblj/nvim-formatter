@@ -90,35 +90,37 @@ M.apply_text_edits = function(bufnr, original_lines, new_lines)
 
     local indices = vim.diff(original_text, new_text, { result_type = 'indices', algorithm = 'histogram' }) --[[@as table]]
 
-    local text_edits = vim.iter.map(function(idx)
-        local line_start, line_count, new_line_start, new_line_count = unpack(idx)
-        local line_end = line_start + line_count - 1
+    local text_edits = vim.iter(indices)
+        :map(function(idx)
+            local line_start, line_count, new_line_start, new_line_count = unpack(idx)
+            local line_end = line_start + line_count - 1
 
-        local replacement = vim.iter(new_lines):slice(new_line_start, new_line_start + new_line_count - 1):totable()
+            local replacement = vim.iter(new_lines):slice(new_line_start, new_line_start + new_line_count - 1):totable()
 
-        if line_count == 0 then
-            -- When the diff is an insert, it actually means to insert after the mentioned line
-            table.insert(replacement, '')
-            return create_text_edit(replacement, line_start, 0, line_end + 1, 0)
-        elseif new_line_count == 0 then
-            return create_text_edit(replacement, line_start - 1, 0, line_end, 0)
-        else
-            -- If we're replacing text, see if we can avoid replacing the entire line
-            local start_char = common_prefix_len(original_lines[line_start], replacement[1])
-            replacement[1] = replacement[1]:sub(start_char + 1)
+            if line_count == 0 then
+                -- When the diff is an insert, it actually means to insert after the mentioned line
+                table.insert(replacement, '')
+                return create_text_edit(replacement, line_start, 0, line_end + 1, 0)
+            elseif new_line_count == 0 then
+                return create_text_edit(replacement, line_start - 1, 0, line_end, 0)
+            else
+                -- If we're replacing text, see if we can avoid replacing the entire line
+                local start_char = common_prefix_len(original_lines[line_start], replacement[1])
+                replacement[1] = replacement[1]:sub(start_char + 1)
 
-            -- If we're only replacing one line, make sure the prefix/suffix calculations don't overlap
-            local suffix = common_suffix_len(original_lines[line_end], replacement[#replacement])
-            if line_start == line_end then
-                suffix = math.min(suffix, #original_lines[line_end] - start_char)
+                -- If we're only replacing one line, make sure the prefix/suffix calculations don't overlap
+                local suffix = common_suffix_len(original_lines[line_end], replacement[#replacement])
+                if line_start == line_end then
+                    suffix = math.min(suffix, #original_lines[line_end] - start_char)
+                end
+
+                local end_char = #original_lines[line_end] - suffix
+                replacement[#replacement] = replacement[#replacement]:sub(1, #replacement[#replacement] - suffix)
+
+                return create_text_edit(replacement, line_start - 1, start_char, line_end - 1, end_char)
             end
-
-            local end_char = #original_lines[line_end] - suffix
-            replacement[#replacement] = replacement[#replacement]:sub(1, #replacement[#replacement] - suffix)
-
-            return create_text_edit(replacement, line_start - 1, start_char, line_end - 1, end_char)
-        end
-    end, indices)
+        end)
+        :totable()
 
     vim.lsp.util.apply_text_edits(text_edits, bufnr, 'utf-8')
 end

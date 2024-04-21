@@ -54,9 +54,11 @@ function M.setup(opts)
 
     local arguments = { 'basic', 'injections' }
     local function parse_cmdline(args)
-        return vim.iter.filter(function(item)
-            return item ~= ''
-        end, vim.split(args, ' '))
+        return vim.iter(vim.split(args, ' '))
+            :filter(function(item)
+                return item ~= ''
+            end)
+            :totable()
     end
 
     ---@param arg_lead string
@@ -66,9 +68,11 @@ function M.setup(opts)
             return
         end
 
-        return vim.iter.filter(function(item)
-            return vim.startswith(item, arg_lead)
-        end, arguments)
+        return vim.iter(arguments)
+            :filter(function(item)
+                return vim.startswith(item, arg_lead)
+            end)
+            :totable()
     end
 
     vim.api.nvim_create_user_command('Format', function(c_opts)

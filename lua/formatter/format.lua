@@ -134,22 +134,26 @@ local function try_transform_text(text, ft, start_line)
     end
 
     local col = vim.fn.match(vim.fn.getline(start_line), '\\S') --[[@as number]]
-    return vim.iter.map(function(val)
-        return string.format('%s%s', string.rep(' ', col), val)
-    end, text)
+    return vim.iter(text)
+        :map(function(val)
+            return string.format('%s%s', string.rep(' ', col), val)
+        end)
+        :totable()
 end
 
 ---@param input string[]
 function Format:run_injections(input)
     local injections = self:find_injections(input)
 
-    local jobs = vim.iter.map(function(injection)
-        return a.void(function(cb)
-            local output = self:run(injection.confs, injection.input)
-            output = try_transform_text(output, injection.ft, injection.start_line)
-            cb({ output = output, start_line = injection.start_line, end_line = injection.end_line })
+    local jobs = vim.iter(injections)
+        :map(function(injection)
+            return a.void(function(cb)
+                local output = self:run(injection.confs, injection.input)
+                output = try_transform_text(output, injection.ft, injection.start_line)
+                cb({ output = output, start_line = injection.start_line, end_line = injection.end_line })
+            end)
         end)
-    end, injections)
+        :totable()
 
     local res = a.join(jobs, 10)
 
@@ -281,11 +285,13 @@ function Format:get_injected_confs(ft)
     -- `disable_injected` or if the executable is different. Check the
     -- executable because we should not format with prettier typescript inside
     -- vue-files. Prettier for vue should do the entire file
-    return vim.iter.map(function(c)
-        if not contains(disable_injected, ft) and not same_executable(self.confs, c.exe) then
-            return c
-        end
-    end, confs)
+    return vim.iter(confs)
+        :map(function(c)
+            if not contains(disable_injected, ft) and not same_executable(self.confs, c.exe) then
+                return c
+            end
+        end)
+        :totable()
 end
 
 ---@param text string

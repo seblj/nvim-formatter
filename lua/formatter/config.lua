@@ -72,9 +72,11 @@ function M.get_ft_configs(bufnr, ft)
         return nil
     end
     if type(f) == 'table' and f[1] ~= nil then
-        return vim.iter.map(function(c)
-            return parse_configs(bufnr, c)
-        end, f)
+        return vim.iter(f)
+            :map(function(c)
+                return parse_configs(bufnr, c)
+            end)
+            :totable()
     end
     return { parse_configs(bufnr, f) }
 end
