@@ -67,8 +67,11 @@ local execute = function(bufnr, conf, input)
         return nil
     end
 
-    if conf.cond and not conf.cond() then
-        return nil
+    if conf.cond then
+        a.scheduler()
+        if not conf.cond() then
+            return nil
+        end
     end
 
     local out = asystem({ conf.exe, unpack(conf.args or {}) }, {
