@@ -86,7 +86,8 @@ function M.setup(opts)
             Format:new(range):start(type)
         else
             local type = vim.iter(arguments):find(args[1]) or 'all'
-            local paths = vim.fn.globpath(vim.loop.cwd(), args[2] or args[1], 0, 1)
+            ---@diagnostic disable-next-line: param-type-mismatch
+            local paths = vim.fn.globpath(vim.uv.cwd(), args[2] or args[1], 0, 1)
 
             for _, path in ipairs(paths) do
                 vim.api.nvim_create_autocmd('BufAdd', {
