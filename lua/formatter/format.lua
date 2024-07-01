@@ -131,6 +131,7 @@ end
 ---@param ft string
 ---@param start_line number
 local function try_transform_text(text, ft, start_line)
+    a.scheduler()
     local conf = config.get().treesitter.auto_indent[ft]
     if not conf or ((type(conf) == 'function') and not conf()) then
         return text
