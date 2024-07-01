@@ -174,7 +174,7 @@ local function run(format, type)
         local output = format:run_injections(format.input)
         format:insert(output)
     else
-        local output = format:run(format.confs, format.input)
+        local output = format.confs and format:run(format.confs, format.input) or format.input
         a.scheduler()
         local ok, res = pcall(function()
             return format:run_injections(output)

@@ -8,48 +8,46 @@ function M.setup(opts)
     opts = opts or {}
     config.set(opts)
 
-    ---@param bufnr number
-    ---@param event string
-    ---@param group string
-    ---@param method function
-    local function setup_autocmd(bufnr, event, group, method)
-        vim.api.nvim_create_autocmd(event, {
-            buffer = bufnr,
-            group = vim.api.nvim_create_augroup(group, { clear = true }),
+    if opts.format_on_save and opts.lsp then
+        vim.api.nvim_create_autocmd('LspAttach', {
+            callback = function(args)
+                local client = vim.lsp.get_client_by_id(args.data.client_id)
+                if not client or not vim.tbl_contains(opts.lsp, client.name) then
+                    return
+                end
+
+                vim.api.nvim_create_autocmd('BufWritePre', {
+                    buffer = args.buf,
+                    group = vim.api.nvim_create_augroup(
+                        string.format('nvim-formatter_lsp_on_save_buf_%s', args.buf),
+                        { clear = true }
+                    ),
+                    callback = function()
+                        if type(opts.format_on_save) == 'function' then
+                            if opts.format_on_save() then
+                                vim.lsp.buf.format()
+                            end
+                        else
+                            vim.lsp.buf.format()
+                        end
+                    end,
+                })
+            end,
+        })
+    elseif opts.format_on_save then
+        vim.api.nvim_create_autocmd('BufWritePost', {
+            pattern = '*',
+            group = vim.api.nvim_create_augroup('nvim-formatter_on_save_buf', { clear = true }),
             callback = function()
                 if type(opts.format_on_save) == 'function' then
                     if opts.format_on_save() then
-                        method()
+                        vim.cmd.Format()
                     end
                 else
-                    method()
+                    vim.cmd.Format()
                 end
             end,
         })
-    end
-
-    if opts.format_on_save then
-        vim.api.nvim_create_autocmd('FileType', {
-            pattern = vim.tbl_keys(opts.filetype),
-            group = vim.api.nvim_create_augroup('nvim-formatter_on_save_ft', { clear = true }),
-            callback = function()
-                local bufnr = vim.api.nvim_get_current_buf()
-                local group = string.format('nvim-formatter_on_save_buf_%s', bufnr)
-                setup_autocmd(bufnr, 'BufWritePost', group, vim.cmd.Format)
-            end,
-        })
-
-        if opts.lsp then
-            vim.api.nvim_create_autocmd('LspAttach', {
-                callback = function(args)
-                    local client = vim.lsp.get_client_by_id(args.data.client_id)
-                    if client and vim.tbl_contains(opts.lsp, client.name) then
-                        local group = string.format('nvim-formatter_lsp_on_save_buf_%s', args.buf)
-                        setup_autocmd(args.buf, 'BufWritePre', group, vim.lsp.buf.format)
-                    end
-                end,
-            })
-        end
     end
 
     local arguments = { 'basic', 'injections' }
