@@ -73,7 +73,7 @@ function M.setup(opts)
             :totable()
     end
 
-    vim.api.nvim_create_user_command('Format', function(c_opts)
+    local function format(c_opts)
         local args = parse_cmdline(c_opts.args)
         local range = c_opts.range ~= 0 and { c_opts.line1, c_opts.line2 }
 
@@ -107,6 +107,23 @@ function M.setup(opts)
                 end
             end
         end
+    end
+
+    vim.api.nvim_create_user_command('Format', function(c_opts)
+        format(c_opts)
+    end, {
+        complete = command_completion,
+        nargs = '?',
+        range = '%',
+        bar = true,
+    })
+
+    vim.api.nvim_create_user_command('FormatWrite', function(c_opts)
+        vim.notify(
+            '`FormatWrite` is deprecated. Use `Format` instead.\n`FormatWrite` will be removed at a later time',
+            vim.log.levels.WARN
+        )
+        format(c_opts)
     end, {
         complete = command_completion,
         nargs = '?',
