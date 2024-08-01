@@ -8,33 +8,7 @@ function M.setup(opts)
     opts = opts or {}
     config.set(opts)
 
-    if opts.format_on_save and opts.lsp then
-        vim.api.nvim_create_autocmd('LspAttach', {
-            callback = function(args)
-                local client = vim.lsp.get_client_by_id(args.data.client_id)
-                if not client or not vim.tbl_contains(opts.lsp, client.name) then
-                    return
-                end
-
-                vim.api.nvim_create_autocmd('BufWritePre', {
-                    buffer = args.buf,
-                    group = vim.api.nvim_create_augroup(
-                        string.format('nvim-formatter_lsp_on_save_buf_%s', args.buf),
-                        { clear = true }
-                    ),
-                    callback = function()
-                        if type(opts.format_on_save) == 'function' then
-                            if opts.format_on_save() then
-                                vim.lsp.buf.format()
-                            end
-                        else
-                            vim.lsp.buf.format()
-                        end
-                    end,
-                })
-            end,
-        })
-    elseif opts.format_on_save then
+    if opts.format_on_save then
         vim.api.nvim_create_autocmd('BufWritePost', {
             pattern = '*',
             group = vim.api.nvim_create_augroup('nvim-formatter_on_save_buf', { clear = true }),

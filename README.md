@@ -144,22 +144,6 @@ require('formatter').setup({
 })
 ```
 
-As `nvim-formatter` is a formatter plugin, it is also able to setup
-`format_on_save` for language servers. It accepts a list of language server
-names. If `format_on_save` is setup, and a list of language server names is
-used, then it will format on save using `vim.lsp.buf.format()` if the language
-server is attached to the buffer, and `format_on_save` either is true or
-resolves to true through a function.
-
-```lua
-require('formatter').setup({
-    format_on_save = function()
-        return not vim.b.disable_formatting
-    end,
-    lsp = { 'rust_analyzer' },
-})
-```
-
 ### Exposed commands
 
 - `Format`: Formats everything in the buffer including injections

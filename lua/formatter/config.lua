@@ -5,7 +5,6 @@ local M = {}
 ---@class NvimFormatterConfig
 ---@field filetype table<string, NvimFormatterFiletypeConfigUnion | NvimFormatterFiletypeConfigUnion[]>
 ---@field format_on_save? boolean | fun(): boolean
----@field lsp? string[]
 ---@field treesitter? NvimFormatterTreesitterConfig
 
 ---@class NvimFormatterTreesitterConfig
@@ -23,7 +22,6 @@ local M = {}
 local config = {
     filetype = {},
     format_on_save = false,
-    lsp = {},
     treesitter = { auto_indent = {}, disable_injected = {} },
 }
 
