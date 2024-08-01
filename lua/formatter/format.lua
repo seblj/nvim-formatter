@@ -333,8 +333,7 @@ function Format:find_injections(output)
 
     parser:for_each_tree(function(tree, ltree)
         local root = tree:root()
-        local range = { root:range() }
-        local start_line, end_line, end_col = range[1], range[3], range[4]
+        local start_line, _, end_line, end_col = root:range()
         local ft = lang_to_ft(self.bufnr, ltree:lang()) or vim.bo[self.bufnr].ft
         local confs = self:get_injected_confs(ft)
         if confs and #confs > 0 then
