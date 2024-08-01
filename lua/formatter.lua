@@ -92,18 +92,28 @@ function M.setup(opts)
         bar = true,
     })
 
-    vim.api.nvim_create_user_command('FormatWrite', function(c_opts)
-        vim.notify(
-            '`FormatWrite` is deprecated. Use `Format` instead.\n`FormatWrite` will be removed at a later time',
-            vim.log.levels.WARN
-        )
-        format(c_opts)
-    end, {
-        complete = command_completion,
-        nargs = '?',
-        range = '%',
-        bar = true,
-    })
+    -- TODO: Remove at a later time
+    local function deprecated_command(command)
+        vim.api.nvim_create_user_command(command, function(c_opts)
+            vim.notify(
+                string.format(
+                    '`%s` is deprecated. Use `Format` instead.\n`%s` will be removed at a later time',
+                    command,
+                    command
+                ),
+                vim.log.levels.WARN
+            )
+            format(c_opts)
+        end, {
+            complete = command_completion,
+            nargs = '?',
+            range = '%',
+            bar = true,
+        })
+    end
+
+    deprecated_command('FormatWrite')
+    deprecated_command('FormatSync')
 end
 
 return M
