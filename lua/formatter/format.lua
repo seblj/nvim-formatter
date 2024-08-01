@@ -331,33 +331,32 @@ function Format:find_injections(output)
     end
     parser:parse(true)
 
-    for lang, child in pairs(parser:children()) do
-        for _, tree in ipairs(child:trees()) do
-            local root = tree:root()
-            local range = { root:range() }
-            local start_line, end_line, end_col = range[1], range[3], range[4]
-            local ft = lang_to_ft(self.bufnr, lang) or vim.bo[self.bufnr].ft
-            local confs = self:get_injected_confs(ft)
-            if confs and #confs > 0 then
-                local text = vim.treesitter.get_node_text(root, buf)
-                if text then
-                    start_line = start_line + get_starting_newlines(text)
-                    -- If start line is equal to end_line we should not format, as it doesn't work so good
-                    -- We also guard if the range given says that end_line is 1 more than start_line, but it doesn't
-                    -- the end_col is 0. This really means that start_line == end_line
-                    if end_line > start_line and (end_line + 1 == start_line and end_col ~= 0) then
-                        table.insert(injections, {
-                            start_line = start_line + 1,
-                            end_line = end_line,
-                            confs = confs,
-                            input = type(text) == 'string' and vim.split(text, '\n') or text,
-                            ft = ft,
-                        })
-                    end
+    parser:for_each_tree(function(tree, ltree)
+        local root = tree:root()
+        local range = { root:range() }
+        local start_line, end_line, end_col = range[1], range[3], range[4]
+        local ft = lang_to_ft(self.bufnr, ltree:lang()) or vim.bo[self.bufnr].ft
+        local confs = self:get_injected_confs(ft)
+        if confs and #confs > 0 then
+            local text = vim.treesitter.get_node_text(root, buf)
+            if text then
+                start_line = start_line + get_starting_newlines(text)
+                -- If start line is equal to end_line we should not format, as it doesn't work so good
+                -- If end_line is just one more than start_line and end_col is 0, then it also really is
+                -- just one line, so do not format that neither
+                if end_line > start_line and not (end_line - 1 == start_line and end_col == 0) then
+                    table.insert(injections, {
+                        start_line = start_line + 1,
+                        end_line = end_line,
+                        confs = confs,
+                        input = type(text) == 'string' and vim.split(text, '\n') or text,
+                        ft = ft,
+                    })
                 end
             end
         end
-    end
+    end)
+
     return injections
 end
 
