@@ -6,6 +6,7 @@ local M = {}
 ---@field filetype table<string, NvimFormatterFiletypeConfigUnion | NvimFormatterFiletypeConfigUnion[]>
 ---@field format_on_save? boolean | fun(): boolean
 ---@field treesitter? NvimFormatterTreesitterConfig
+---@field lsp? string[]
 
 ---@class NvimFormatterTreesitterConfig
 ---@field auto_indent? table<string, boolean | fun(): boolean>

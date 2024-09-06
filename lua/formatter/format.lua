@@ -203,6 +203,25 @@ function Format:start(type)
         return vim.notify('Buffer is not modifiable', vim.log.levels.INFO, notify_opts)
     end
 
+    -- If we have lsp and we don't have any filetype conf, then see if one of the
+    -- language servers that is set up, is attached to self.bufnr.
+    -- If it is not, then fallback to try to format injected filetypes.
+    -- LSP formatting and injected formatting doesn't work so well together
+    if not self.confs and config.get().lsp then
+        local active_clients = vim.lsp.get_clients({ bufnr = self.bufnr })
+        local found = vim.iter(config.get().lsp):any(function(it)
+            return vim.iter(active_clients):any(function(c)
+                return c.name == it
+            end)
+        end)
+        if found then
+            vim.lsp.buf.format()
+            return vim.api.nvim_buf_call(self.bufnr, function()
+                vim.cmd.update({ mods = { emsg_silent = true, silent = true, noautocmd = true } })
+            end)
+        end
+    end
+
     vim.api.nvim_create_autocmd({ 'ExitPre', 'VimLeavePre' }, {
         pattern = '*',
         group = vim.api.nvim_create_augroup('FormatterAsync', { clear = true }),
