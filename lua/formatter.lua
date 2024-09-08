@@ -49,7 +49,7 @@ function M.setup(opts)
 
     local function format(c_opts)
         local args = parse_cmdline(c_opts.args)
-        local range = c_opts.range ~= 0 and { c_opts.line1, c_opts.line2 }
+        local range = c_opts.range ~= 0 and { c_opts.line1, c_opts.line2 } or nil
 
         -- Format regular if no arguments or the only argument is either
         -- "basic" or "injections"

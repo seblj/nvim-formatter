@@ -23,7 +23,7 @@ local notify_opts = { title = 'Formatter' }
 ---@field input table
 local Format = {}
 
----@param range number[] | false
+---@param range? number[]
 ---@param bufnr? number
 function Format:new(range, bufnr)
     local o = {}
