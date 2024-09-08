@@ -1,10 +1,10 @@
 # nvim-formatter
 
-Formatter with treesitter integration
+Asynchronous formatter with treesitter integration
 
 ## Requirements
 
-- Neovim 0.9
+- Neovim 0.10
 
 ## Install
 
@@ -114,13 +114,6 @@ injected area with the indent of the first line of the injection.
 be a table of filetypes that it should not format as an injected language. The
 example will for example not format Rust regions in a markdown file.
 
-### Notes:
-
-By default `nvim-formatter` will format the buffer async and not block the editor.
-When the result from the formatter comes back, it only inserts the changes if
-there hasn't been any changes in the buffer while it was running the formatter.
-To format synchronously, use `FormatSync`
-
 ### Format on save
 
 To enable format on save, you can set an option `format_on_save` to true or a
@@ -153,35 +146,30 @@ require('formatter').setup({
 
 As `nvim-formatter` is a formatter plugin, it is also able to setup
 `format_on_save` for language servers. It accepts a list of language server
-names. If `format_on_save` is setup, and a list of language server names is
-used, then it will format on save using `vim.lsp.buf.format()` if the language
-server is attached to the buffer, and `format_on_save` either is true or
-resolves to true through a function.
+names. This will run `vim.lsp.buf.format()` through the `Format` command.
+If you also have `format_on_save` setup, then it will of course also work with that.
 
 ```lua
 require('formatter').setup({
-    format_on_save = function()
-        return not vim.b.disable_formatting
-    end,
-    lsp = { 'rust_analyzer' },
+    lsp = { 'rust_analyzer', 'lua_ls' },
 })
 ```
 
 ### Exposed commands
 
 - `Format`: Formats everything in the buffer including injections
-- `FormatWrite`: Same as `Format` but sets an autocmd on `ExitPre` to format
-  before `:wq`.
-- `FormatSync`: Use to format synchronously
 
-In addition to this, both commands is able to take an argument of either `basic`
+In addition to this, the command is able to take an argument of either `basic`
 or `injections`.
 
 - `basic` will only format the buffer _excluding_ treesitter injections.
 - `injections` will _only_ format the injections in the buffer
 
 These are optional, and the default behaviour without these
-will format both with and without treesitter.
+will format both with and without treesitter. First it will try to format
+normally, and then it will try to format the injections. Everything will be
+applied at once to maintain a single undo history. Currently, it will format
+normally if injections fail.
 
 It is also possible to specify a list of files or a glob-pattern to the command,
 and `nvim-formatter` will then format all files matching with the formatter
@@ -191,7 +179,7 @@ setup.
 
 `nvim-formatter` also supports formatting via the command line. It is possibly
 by running the format command via script mode like:
-`nvim -u ~/.config/nvim/init.lua -Es +":FormatSync <args>"`
+`nvim -u ~/.config/nvim/init.lua -Es +":Format <args>"`
 
 Here you can pass all the same arguments as inside neovim, and `nvim-formatter`
 will format all the matching files from the arguments. A pro-tip is to create a
@@ -199,17 +187,29 @@ function like:
 
 ```bash
 function format() {
-    nvim -u ~/.config/nvim/init.lua -Es +":FormatSync $*"
+    nvim -u ~/.config/nvim/init.lua -Es +":Format $*"
 }
 ```
 
 Then you can just call `format **/*.lua` for example.
 
-Note that you have to use `FormatSync` as the command is ran in script-mode. If
-it runs asynchronously, it could exit the script before it is finished
-formatting
-
 ## Acknowledgement
+
+The implementation of minimal text edits was inspired by
+[`conform.nvim`](https://github.com/stevearc/conform.nvim/tree/master). I
+initially wrote this plugin before `conform.nvim` existed, but then without
+minimal text edits. This was pretty much the only thing I was missing. I would
+highly suggest to use `conform.nvim` over this plugin, as I mainly wrote this
+for my own use, when `formatter.nvim` didn't fit my needs. I will continue to
+use this plugin and maintain it, but I can't guarantee the same maintainability
+as `conform.nvim`, and I will probably not add many more features as I see this
+as pretty much feature complete.
+
+Also, a very big thank you to [`lewis6991`](https://github.com/lewis6991) for
+his async [plugin](https://github.com/lewis6991/async.nvim) which I decided to
+bundle inside here to not force users to add another plugin to their plugin list.
+Thank you to all his work for neovim core, and all the amazing plugins he has developed
+and maintain
 
 Huge thanks to [`formatter.nvim`](https://github.com/mhartington/formatter.nvim)
 for initial inspiration
