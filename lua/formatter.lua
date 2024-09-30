@@ -130,7 +130,7 @@ M.formatexpr = function()
         return 0
     end
 
-    Format:new({ start_lnum, end_lnum }):start(type)
+    Format:new({ start_lnum, end_lnum }):start("all")
     return 0
 end
 
