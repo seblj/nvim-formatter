@@ -116,4 +116,22 @@ function M.setup(opts)
     deprecated_command('FormatSync')
 end
 
+M.formatexpr = function()
+    if vim.list_contains({ 'i', 'R', 'ic', 'ix' }, vim.fn.mode()) then
+        -- `formatexpr` is also called when exceeding `textwidth` in insert mode
+        -- fall back to internal formatting
+        return 1
+    end
+
+    local start_lnum = vim.v.lnum
+    local end_lnum = start_lnum + vim.v.count - 1
+
+    if start_lnum <= 0 or end_lnum <= 0 then
+        return 0
+    end
+
+    Format:new({ start_lnum, end_lnum }):start(type)
+    return 0
+end
+
 return M
