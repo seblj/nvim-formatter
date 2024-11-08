@@ -1,12 +1,9 @@
-local config = require('formatter.config')
-local Format = require('formatter.format')
-
 local M = {}
 
 ---@param opts NvimFormatterConfig | nil
 function M.setup(opts)
     opts = opts or {}
-    config.set(opts)
+    require('formatter.config').set(opts)
 
     if opts.format_on_save then
         vim.api.nvim_create_autocmd('BufWritePost', {
@@ -34,6 +31,7 @@ function M.setup(opts)
     end
 
     vim.api.nvim_create_user_command('Format', function(c_opts)
+        local Format = require('formatter.format')
 
         local args = parse_cmdline(c_opts.args)
         local range = c_opts.range ~= 0 and { c_opts.line1, c_opts.line2 } or nil
@@ -101,7 +99,7 @@ M.formatexpr = function()
         return 0
     end
 
-    Format:new({ start_lnum, end_lnum }):start("all")
+    require('formatter.format'):new({ start_lnum, end_lnum }):start("all")
     return 0
 end
 
