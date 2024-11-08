@@ -33,21 +33,8 @@ function M.setup(opts)
             :totable()
     end
 
-    ---@param arg_lead string
-    local function command_completion(arg_lead, cmdline)
-        local args = parse_cmdline(cmdline)
-        if vim.tbl_contains(arguments, args[2]) then
-            return
-        end
+    vim.api.nvim_create_user_command('Format', function(c_opts)
 
-        return vim.iter(arguments)
-            :filter(function(item)
-                return vim.startswith(item, arg_lead)
-            end)
-            :totable()
-    end
-
-    local function format(c_opts)
         local args = parse_cmdline(c_opts.args)
         local range = c_opts.range ~= 0 and { c_opts.line1, c_opts.line2 } or nil
 
@@ -81,39 +68,23 @@ function M.setup(opts)
                 end
             end
         end
-    end
-
-    vim.api.nvim_create_user_command('Format', function(c_opts)
-        format(c_opts)
     end, {
-        complete = command_completion,
+        complete = function(arg_lead, cmdline)
+            local args = parse_cmdline(cmdline)
+            if vim.tbl_contains(arguments, args[2]) then
+                return
+            end
+
+            return vim.iter(arguments)
+                :filter(function(item)
+                    return vim.startswith(item, arg_lead)
+                end)
+                :totable()
+        end,
         nargs = '?',
         range = '%',
         bar = true,
     })
-
-    -- TODO: Remove at a later time
-    local function deprecated_command(command)
-        vim.api.nvim_create_user_command(command, function(c_opts)
-            vim.notify(
-                string.format(
-                    '`%s` is deprecated. Use `Format` instead.\n`%s` will be removed at a later time',
-                    command,
-                    command
-                ),
-                vim.log.levels.WARN
-            )
-            format(c_opts)
-        end, {
-            complete = command_completion,
-            nargs = '?',
-            range = '%',
-            bar = true,
-        })
-    end
-
-    deprecated_command('FormatWrite')
-    deprecated_command('FormatSync')
 end
 
 M.formatexpr = function()
