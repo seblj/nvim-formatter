@@ -102,71 +102,6 @@ local execute = function(bufnr, conf, input)
     return vim.iter(stdout:gmatch('([^\n]*)\n')):totable()
 end
 
----@class NvimFormatterInjectionOutput
----@field start_line number
----@field end_line number
----@field output string[]
-
----@param output NvimFormatterInjectionOutput[][]
----@param input string[]
----@return string[]
-local get_injection_output = function(output, input)
-    -- Need to sort it to start backwards to not mess with the range
-    table.sort(output, function(a, b)
-        return a[1].start_line > b[1].start_line
-    end)
-
-    local current_output = vim.deepcopy(input)
-    for _, injection in ipairs(output) do
-        for _ = injection[1].start_line, injection[1].end_line, 1 do
-            table.remove(current_output, injection[1].start_line)
-        end
-        for i, text in ipairs(injection[1].output) do
-            table.insert(current_output, injection[1].start_line + i - 1, text)
-        end
-    end
-    return current_output
-end
-
----@param text string[]
----@param ft string
----@param start_line number
----@return string[]
-local function try_transform_text(text, ft, start_line)
-    async.scheduler()
-    local conf = config.get().treesitter.auto_indent[ft]
-    if not conf or ((type(conf) == 'function') and not conf()) then
-        return text
-    end
-
-    local col = vim.fn.match(vim.fn.getline(start_line), '\\S') --[[@as number]]
-    return vim.iter(text)
-        :map(function(val)
-            return string.format('%s%s', string.rep(' ', col), val)
-        end)
-        :totable()
-end
-
----@param input string[]
----@return string[]
-function Format:run_injections(input)
-    local injections = self:find_injections(input)
-
-    local jobs = vim.iter(injections)
-        :map(function(injection)
-            return async.void(function(cb)
-                local output = self:run(injection.confs, injection.input)
-                output = try_transform_text(output, injection.ft, injection.start_line)
-                cb({ output = output, start_line = injection.start_line, end_line = injection.end_line })
-            end)
-        end)
-        :totable()
-
-    local res = async.join(jobs, 10) --[[ @as NvimFormatterInjectionOutput[][] ]]
-
-    return get_injection_output(res, input)
-end
-
 ---@param format NvimFormatterFormat
 ---@param type "basic" | "injections" | "all"
 local function run(format, type)
@@ -193,6 +128,7 @@ end
 ---@param format NvimFormatterFormat
 ---@param type "basic" | "injections" | "all"
 local start = async.void(function(format, type)
+    format.is_formatting = true
     local ok, res = pcall(run, format, type)
     format.is_formatting = false
     if not ok then
@@ -235,7 +171,6 @@ function Format:start(type)
         end,
     })
 
-    self.is_formatting = true
     start(self, type)
 end
 
@@ -244,8 +179,7 @@ function Format:insert(output)
     if output and not vim.deep_equal(output, self.input) then
         vim.schedule(function()
             if self.inital_changedtick ~= vim.api.nvim_buf_get_changedtick(self.bufnr) then
-                vim.notify('Buffer changed while formatting', vim.log.levels.INFO, notify_opts)
-                return
+                return vim.notify('Buffer changed while formatting', vim.log.levels.INFO, notify_opts)
             end
             require('formatter.text_edit').apply_text_edits(self.bufnr, self.input, output)
             vim.api.nvim_buf_call(self.bufnr, function()
@@ -278,6 +212,65 @@ function Format:run(confs, input)
     else
         return formatted_output
     end
+end
+
+---@param text string[]
+---@param ft string
+---@param start_line number
+---@return string[]
+local function try_transform_text(text, ft, start_line)
+    async.scheduler()
+    local conf = config.get().treesitter.auto_indent[ft]
+    if not conf or ((type(conf) == 'function') and not conf()) then
+        return text
+    end
+
+    local col = vim.fn.match(vim.fn.getline(start_line), '\\S') --[[@as number]]
+    return vim.iter(text)
+        :map(function(val)
+            return string.format('%s%s', string.rep(' ', col), val)
+        end)
+        :totable()
+end
+
+---@class NvimFormatterInjectionOutput
+---@field start_line number
+---@field end_line number
+---@field output string[]
+
+---@param input string[]
+---@return string[]
+function Format:run_injections(input)
+    local injections = self:find_injections(input)
+
+    local jobs = vim.iter(injections)
+        :map(function(injection)
+            return async.void(function(cb)
+                local output = self:run(injection.confs, injection.input)
+                output = try_transform_text(output, injection.ft, injection.start_line)
+                cb({ output = output, start_line = injection.start_line, end_line = injection.end_line })
+            end)
+        end)
+        :totable()
+
+    ---@type NvimFormatterInjectionOutput[]
+    local res = vim.iter(async.join(jobs, 10)):flatten():totable()
+
+    -- Need to sort it to start backwards to not mess with the range
+    table.sort(res, function(a, b)
+        return a.start_line > b.start_line
+    end)
+
+    local current_output = vim.deepcopy(input)
+    for _, injection in ipairs(res) do
+        for _ = injection.start_line, injection.end_line, 1 do
+            table.remove(current_output, injection.start_line)
+        end
+        for i, text in ipairs(injection.output) do
+            table.insert(current_output, injection.start_line + i - 1, text)
+        end
+    end
+    return current_output
 end
 
 ---@param t table?
