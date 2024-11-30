@@ -34,7 +34,7 @@ function M.setup(opts)
         local Format = require('formatter.format')
 
         local args = parse_cmdline(c_opts.args)
-        local range = c_opts.range ~= 0 and { c_opts.line1, c_opts.line2 } or nil
+        local range = c_opts.range ~= 0 and { start = c_opts.line1, ['end'] = c_opts.line2 } or nil
 
         -- Format regular if no arguments or the only argument is either
         -- "basic" or "injections"
@@ -99,7 +99,7 @@ M.formatexpr = function()
         return 0
     end
 
-    require('formatter.format'):new({ start_lnum, end_lnum }):start("all")
+    require('formatter.format'):new({ start = start_lnum, ['end'] = end_lnum }):start('all')
     return 0
 end
 

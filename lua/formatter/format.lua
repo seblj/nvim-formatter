@@ -1,6 +1,5 @@
 local config = require('formatter.config')
-local text_edit = require('formatter.text_edit')
-local a = require('formatter.async')
+local async = require('formatter.async')
 local notify_opts = { title = 'Formatter' }
 
 ---@class NvimFormatterFormatRange
@@ -23,7 +22,7 @@ local notify_opts = { title = 'Formatter' }
 ---@field input table
 local Format = {}
 
----@param range? number[]
+---@param range? NvimFormatterFormatRange[]
 ---@param bufnr? number
 function Format:new(range, bufnr)
     local o = {}
@@ -31,17 +30,12 @@ function Format:new(range, bufnr)
 
     o.bufnr = bufnr or vim.api.nvim_get_current_buf()
     o.inital_changedtick = vim.api.nvim_buf_get_changedtick(o.bufnr)
-    local start_line = range and range[1] or 1
-    local end_line = range and range[2] or -1
 
-    local input = vim.api.nvim_buf_get_lines(o.bufnr, 0, -1, false)
-
-    o.range = end_line ~= -1 and { start = start_line, ['end'] = end_line } or nil
-
+    o.range = range
     o.is_formatting = false
 
     o.confs = config.get_ft_configs(o.bufnr, vim.bo[o.bufnr].ft)
-    o.input = input
+    o.input = vim.api.nvim_buf_get_lines(o.bufnr, 0, -1, false)
 
     return o
 end
@@ -58,17 +52,17 @@ local function system_wrap(...)
     end, 5000)
 end
 
-local asystem = a.wrap(system_wrap, 3)
+local asystem = async.wrap(system_wrap, 3)
 
 local execute = function(bufnr, conf, input)
     if vim.fn.executable(conf.exe) ~= 1 then
-        a.scheduler()
+        async.scheduler()
         vim.notify_once(string.format('%s: executable not found', conf.exe), vim.log.levels.ERROR, notify_opts)
         return nil
     end
 
     if conf.cond then
-        a.scheduler()
+        async.scheduler()
         if not conf.cond() then
             return nil
         end
@@ -80,7 +74,7 @@ local execute = function(bufnr, conf, input)
     })
 
     if out.code ~= 0 then
-        a.scheduler()
+        async.scheduler()
         local errmsg = out.stderr and out.stderr or out.stdout
         vim.notify(
             string.format(
@@ -95,7 +89,7 @@ local execute = function(bufnr, conf, input)
         return nil
     end
     if out.signal == 9 then
-        a.scheduler()
+        async.scheduler()
         vim.notify(
             string.format('Timeout when formatting %s with %s', vim.api.nvim_buf_get_name(bufnr), conf.exe),
             vim.log.levels.ERROR,
@@ -108,11 +102,18 @@ local execute = function(bufnr, conf, input)
     return vim.iter(stdout:gmatch('([^\n]*)\n')):totable()
 end
 
+---@class NvimFormatterInjectionOutput
+---@field start_line number
+---@field end_line number
+---@field output string[]
+
+---@param output NvimFormatterInjectionOutput[][]
+---@param input string[]
 ---@return string[]
 local get_injection_output = function(output, input)
     -- Need to sort it to start backwards to not mess with the range
-    table.sort(output, function(_a, b)
-        return _a[1].start_line > b[1].start_line
+    table.sort(output, function(a, b)
+        return a[1].start_line > b[1].start_line
     end)
 
     local current_output = vim.deepcopy(input)
@@ -130,8 +131,9 @@ end
 ---@param text string[]
 ---@param ft string
 ---@param start_line number
+---@return string[]
 local function try_transform_text(text, ft, start_line)
-    a.scheduler()
+    async.scheduler()
     local conf = config.get().treesitter.auto_indent[ft]
     if not conf or ((type(conf) == 'function') and not conf()) then
         return text
@@ -146,12 +148,13 @@ local function try_transform_text(text, ft, start_line)
 end
 
 ---@param input string[]
+---@return string[]
 function Format:run_injections(input)
     local injections = self:find_injections(input)
 
     local jobs = vim.iter(injections)
         :map(function(injection)
-            return a.void(function(cb)
+            return async.void(function(cb)
                 local output = self:run(injection.confs, injection.input)
                 output = try_transform_text(output, injection.ft, injection.start_line)
                 cb({ output = output, start_line = injection.start_line, end_line = injection.end_line })
@@ -159,7 +162,7 @@ function Format:run_injections(input)
         end)
         :totable()
 
-    local res = a.join(jobs, 10)
+    local res = async.join(jobs, 10) --[[ @as NvimFormatterInjectionOutput[][] ]]
 
     return get_injection_output(res, input)
 end
@@ -175,7 +178,7 @@ local function run(format, type)
         format:insert(output)
     else
         local output = format.confs and format:run(format.confs, format.input) or format.input
-        a.scheduler()
+        async.scheduler()
         local ok, res = pcall(function()
             return format:run_injections(output)
         end)
@@ -189,7 +192,7 @@ end
 
 ---@param format NvimFormatterFormat
 ---@param type "basic" | "injections" | "all"
-local start = a.void(function(format, type)
+local start = async.void(function(format, type)
     local ok, res = pcall(run, format, type)
     format.is_formatting = false
     if not ok then
@@ -244,7 +247,7 @@ function Format:insert(output)
                 vim.notify('Buffer changed while formatting', vim.log.levels.INFO, notify_opts)
                 return
             end
-            text_edit.apply_text_edits(self.bufnr, self.input, output)
+            require('formatter.text_edit').apply_text_edits(self.bufnr, self.input, output)
             vim.api.nvim_buf_call(self.bufnr, function()
                 vim.cmd.update({ mods = { emsg_silent = true, silent = true, noautocmd = true } })
             end)
@@ -276,6 +279,7 @@ function Format:run(confs, input)
         return formatted_output
     end
 end
+
 ---@param t table?
 ---@param ft string
 ---@return boolean
