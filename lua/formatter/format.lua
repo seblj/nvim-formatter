@@ -195,15 +195,15 @@ end
 ---@param input string[]
 ---@param formatted string[]
 ---@param range NvimFormatterFormatRange
----NOTE: This mutates `input`!
 local function replace(input, formatted, range)
+    local output = { unpack(input) }
     for _ = range.start, range['end'], 1 do
-        table.remove(input, range.start)
+        table.remove(output, range.start)
     end
     for i, text in ipairs(formatted) do
-        table.insert(input, range.start + i - 1, text)
+        table.insert(output, range.start + i - 1, text)
     end
-    return input
+    return output
 end
 
 ---Returns the output from formatting the buffer with all configs
