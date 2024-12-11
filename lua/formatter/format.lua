@@ -7,8 +7,7 @@ local notify_opts = { title = 'Formatter' }
 ---@field end number
 
 ---@class NvimFormatterInjection
----@field start_line number
----@field end_line number
+---@field range NvimFormatterFormatRange
 ---@field ft string
 ---@field confs NvimFormatterFiletypeConfig[]
 ---@field input string[]
@@ -54,6 +53,10 @@ end
 
 local asystem = async.wrap(system_wrap, 3)
 
+---@param bufnr number
+---@param conf NvimFormatterFiletypeConfig
+---@param input string[]
+---@return string[] | nil
 local execute = function(bufnr, conf, input)
     if vim.fn.executable(conf.exe) ~= 1 then
         async.scheduler()
@@ -189,6 +192,20 @@ function Format:insert(output)
     end
 end
 
+---@param input string[]
+---@param formatted string[]
+---@param range NvimFormatterFormatRange
+---NOTE: This mutates `input`!
+local function replace(input, formatted, range)
+    for _ = range.start, range['end'], 1 do
+        table.remove(input, range.start)
+    end
+    for i, text in ipairs(formatted) do
+        table.insert(input, range.start + i - 1, text)
+    end
+    return input
+end
+
 ---Returns the output from formatting the buffer with all configs
 ---@param confs NvimFormatterFiletypeConfig[]
 ---@param input string[]
@@ -201,14 +218,7 @@ function Format:run(confs, input)
     end)
 
     if self.range then
-        local output = vim.deepcopy(input)
-        for _ = self.range.start, self.range['end'], 1 do
-            table.remove(output, self.range.start)
-        end
-        for i, text in ipairs(formatted_output) do
-            table.insert(output, self.range.start + i - 1, text)
-        end
-        return output
+        return replace(input, formatted_output, self.range)
     else
         return formatted_output
     end
@@ -216,16 +226,16 @@ end
 
 ---@param text string[]
 ---@param ft string
----@param start_line number
+---@param range NvimFormatterFormatRange
 ---@return string[]
-local function try_transform_text(text, ft, start_line)
+local function try_transform_text(text, ft, range)
     async.scheduler()
     local conf = config.get().treesitter.auto_indent[ft]
     if not conf or ((type(conf) == 'function') and not conf()) then
         return text
     end
 
-    local col = vim.fn.match(vim.fn.getline(start_line), '\\S') --[[@as number]]
+    local col = vim.fn.match(vim.fn.getline(range.start), '\\S') --[[@as number]]
     return vim.iter(text)
         :map(function(val)
             return string.format('%s%s', string.rep(' ', col), val)
@@ -234,8 +244,7 @@ local function try_transform_text(text, ft, start_line)
 end
 
 ---@class NvimFormatterInjectionOutput
----@field start_line number
----@field end_line number
+---@field range NvimFormatterFormatRange
 ---@field output string[]
 
 ---@param input string[]
@@ -247,8 +256,8 @@ function Format:run_injections(input)
         :map(function(injection)
             return async.void(function(cb)
                 local output = self:run(injection.confs, injection.input)
-                output = try_transform_text(output, injection.ft, injection.start_line)
-                cb({ output = output, start_line = injection.start_line, end_line = injection.end_line })
+                output = try_transform_text(output, injection.ft, injection.range)
+                cb({ output = output, range = injection.range })
             end)
         end)
         :totable()
@@ -258,19 +267,12 @@ function Format:run_injections(input)
 
     -- Need to sort it to start backwards to not mess with the range
     table.sort(res, function(a, b)
-        return a.start_line > b.start_line
+        return a.range.start > b.range.start
     end)
 
-    local current_output = vim.deepcopy(input)
-    for _, injection in ipairs(res) do
-        for _ = injection.start_line, injection.end_line, 1 do
-            table.remove(current_output, injection.start_line)
-        end
-        for i, text in ipairs(injection.output) do
-            table.insert(current_output, injection.start_line + i - 1, text)
-        end
-    end
-    return current_output
+    return vim.iter(res):fold(input, function(acc, injection)
+        return replace(acc, injection.output, injection.range)
+    end)
 end
 
 ---@param t table?
@@ -361,8 +363,7 @@ function Format:find_injections(output)
                 -- just one line, so do not format that neither
                 if end_line > start_line and not (end_line - 1 == start_line and end_col == 0) then
                     table.insert(injections, {
-                        start_line = start_line + 1,
-                        end_line = end_line,
+                        range = { start = start_line + 1, ['end'] = end_line },
                         confs = confs,
                         input = type(text) == 'string' and vim.split(text, '\n') or text,
                         ft = ft,
