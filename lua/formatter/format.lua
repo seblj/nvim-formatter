@@ -58,17 +58,17 @@ local asystem = async.wrap(system_wrap, 3)
 ---@param input string[]
 ---@return string[] | nil
 local execute = function(bufnr, conf, input)
-    if vim.fn.executable(conf.exe) ~= 1 then
-        async.scheduler()
-        vim.notify_once(string.format('%s: executable not found', conf.exe), vim.log.levels.ERROR, notify_opts)
-        return nil
-    end
-
     if conf.cond then
         async.scheduler()
         if not conf.cond() then
             return nil
         end
+    end
+
+    if vim.fn.executable(conf.exe) ~= 1 then
+        async.scheduler()
+        vim.notify_once(string.format('%s: executable not found', conf.exe), vim.log.levels.ERROR, notify_opts)
+        return nil
     end
 
     local out = asystem({ conf.exe, unpack(conf.args or {}) }, {
