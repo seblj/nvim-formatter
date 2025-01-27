@@ -23,7 +23,7 @@ local M = {}
 local config = {
     filetype = {},
     format_on_save = false,
-    treesitter = { auto_indent = {}, disable_injected = {} },
+    treesitter = { auto_indent = {}, disable_injected = { ['*'] = { '_' } } },
 }
 
 ---@param opts NvimFormatterConfig

@@ -117,20 +117,14 @@ example will for example not format Rust regions in a markdown file.
 ### Fallback support
 
 There is a special syntax for fallback, if you for example want to run `sed` to remove all trailing white space
-in the buffer. This is an example of how you can do that
+in the buffer. This is an example of how you can do that.
 
 ```lua
 require('formatter').setup({
     treesitter = {
-        -- NOTE: This is needed because otherwise it will try to run `sed` for all injected regions in the buffer
-        -- Otherwise it can mess up the file and not insert it properly.
-        -- I am considering making it _never_ be able to run the fallback configuration on injected regions
-        -- but I haven't decided yet
-        disable_injected = {
-            ['*'] = { '_' },
-        },
-
         filetype = {
+            -- By default, this will only run it on the entire buffer, and not on any injected regions.
+            -- If you want that behavior, you need to configure `disabled_injected` with `*` as key to be an empty table
             _ = 'sed s/[[:space:]]*$//',
         },
     },
