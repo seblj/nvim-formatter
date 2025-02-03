@@ -114,6 +114,23 @@ injected area with the indent of the first line of the injection.
 be a table of filetypes that it should not format as an injected language. The
 example will for example not format Rust regions in a markdown file.
 
+### Fallback support
+
+There is a special syntax for fallback, if you for example want to run `sed` to remove all trailing white space
+in the buffer. This is an example of how you can do that.
+
+```lua
+require('formatter').setup({
+    treesitter = {
+        filetype = {
+            -- By default, this will only run it on the entire buffer, and not on any injected regions.
+            -- If you want that behavior, you need to configure `disabled_injected` with `*` as key to be an empty table
+            _ = 'sed s/[[:space:]]*$//',
+        },
+    },
+})
+```
+
 ### Format on save
 
 To enable format on save, you can set an option `format_on_save` to true or a

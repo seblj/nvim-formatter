@@ -23,7 +23,7 @@ local M = {}
 local config = {
     filetype = {},
     format_on_save = false,
-    treesitter = { auto_indent = {}, disable_injected = {} },
+    treesitter = { auto_indent = {}, disable_injected = { ['*'] = { '_' } } },
 }
 
 ---@param opts NvimFormatterConfig
@@ -66,7 +66,7 @@ end
 ---@param ft string
 ---@return table<NvimFormatterFiletypeConfig> | nil
 function M.get_ft_configs(bufnr, ft)
-    local f = config.filetype[ft]
+    local f = config.filetype[ft] or config.filetype['_']
     if not f then
         return nil
     end

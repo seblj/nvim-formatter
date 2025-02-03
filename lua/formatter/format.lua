@@ -302,7 +302,11 @@ function Format:get_injected_confs(ft)
         return {}
     end
 
-    local disable_injected = config.get().treesitter.disable_injected[vim.bo[self.bufnr].ft]
+    local resolved_ft = config.get().filetype[ft] and ft or '_'
+
+    local ft_disable_injected = vim.deepcopy(config.get().treesitter.disable_injected[vim.bo[self.bufnr].ft] or {})
+    local global_disable_injected = config.get().treesitter.disable_injected['*'] or {}
+    local disable_injected = vim.list_extend(ft_disable_injected, global_disable_injected)
 
     -- Only try to format an injected language if it is not disabled with
     -- `disable_injected` or if the executable is different. Check the
@@ -310,7 +314,7 @@ function Format:get_injected_confs(ft)
     -- vue-files. Prettier for vue should do the entire file
     return vim.iter(confs)
         :map(function(c)
-            if not contains(disable_injected, ft) and not same_executable(self.confs, c.exe) then
+            if not contains(disable_injected, resolved_ft) and not same_executable(self.confs, c.exe) then
                 return c
             end
         end)
