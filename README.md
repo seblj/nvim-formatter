@@ -12,7 +12,7 @@ Using your package manager of choice
 
 ```lua
 require('lazy').setup({
-    { 'seblj/nvim-formatter' },
+    { 'seblyng/nvim-formatter' },
 })
 ```
 
